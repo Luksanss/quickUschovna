@@ -98,6 +98,8 @@ final class AppModel {
     @ObservationIgnored private var speed: [UUID: SpeedMeter] = [:]
     /// Keeps the Mac awake while something is sending.
     @ObservationIgnored private var activity: NSObjectProtocol?
+    /// Sparkle's Check for Updates… (`Updater`), which `AppDelegate` sets in Release builds only.
+    @ObservationIgnored var onCheckForUpdates: (() -> Void)?
 
     init(service: UploadService = UschovnaService(), store: SettingsStore = .standard) {
         self.service = service
@@ -470,6 +472,17 @@ final class AppModel {
     func toggleLaunchAtLogin() {
         LaunchAtLogin.toggle()
         launchAtLogin = LaunchAtLogin.isEnabled
+    }
+
+    /// "Check for Updates…": closes the panel, as a menu closes on a choice, and hands over to
+    /// Sparkle's window. A Debug build has no updater, so it only beeps.
+    func checkForUpdates() {
+        closePanel()
+        guard let onCheckForUpdates else {
+            NSSound.beep()
+            return
+        }
+        onCheckForUpdates()
     }
 
     /// "Quit quickUschovna": quits, or asks first while something is sending.

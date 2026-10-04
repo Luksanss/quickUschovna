@@ -6,14 +6,14 @@
 #
 # The arguments can also come from VERSION, BUILD_NUMBER and SIGNING_IDENTITY.
 #
-# The app embeds the Finder Quick Action, QuickAction.appex, and the two are signed differently:
-# the extension is sandboxed and the app isn't. Xcode builds both and signs them ad hoc, with the
-# entitlements it derives from each target's build settings. This script then signs them again,
-# inside out: the extension with its own entitlements, then the app with its own, both with the
-# hardened runtime. Never --deep, which would sign the extension with the app's entitlements and
-# take its sandbox away. With an identity, that's the identity (an Apple Development certificate
-# of team 5KDU5HYH35); without one, it's ad hoc, and macOS may not load the extension of an ad-hoc
-# app (docs/releasing.md § Signing).
+# The app embeds the Finder Quick Action, QuickAction.appex, and Sparkle.framework, the updater.
+# The extension is sandboxed and the app isn't. Xcode builds them all and signs them ad hoc, with
+# the entitlements it derives from each target's build settings. This script then signs them
+# again, inside out: the framework and the extension, then the app, all with the hardened runtime
+# and each with its own entitlements. Never --deep, which would sign the extension with the app's
+# entitlements and take its sandbox away, and sign Sparkle's helpers again. With an identity,
+# that's the identity (an Apple Development certificate of team 5KDU5HYH35); without one, it's ad
+# hoc, and macOS may not load the extension of an ad-hoc app (docs/releasing.md § Signing).
 #
 # dmgbuild lays out the image's window; it's installed by hash into build/dmgbuild, with
 # Python 3.10 or later.
@@ -29,6 +29,7 @@ derived=$root/build/release-DerivedData.noindex # .noindex keeps Spotlight from 
 out=$root/build/release
 app=$derived/Build/Products/Release/quickUschovna.app
 extension=$app/Contents/PlugIns/QuickAction.appex
+framework=$app/Contents/Frameworks/Sparkle.framework
 dmg=$out/quickUschovna-$version.dmg
 log=$out/build.log
 venv=$root/build/dmgbuild
@@ -51,12 +52,12 @@ if grep -F ': warning: ' "$log" | grep -F "$root/"; then
   exit 1
 fi
 
-# The extension is the only code nested in the app. Anything else would keep Xcode's ad-hoc
-# signature, so it has to be signed here first.
+# The extension and Sparkle's framework are the only code nested in the app. Anything else would
+# keep Xcode's ad-hoc signature, so it has to be signed here first.
 nested=$(cd "$app/Contents" && find . -mindepth 1 \( -name '*.appex' -o -name '*.app' -o -name '*.xpc' \
-  -o -name '*.framework' -o -name '*.dylib' \) -prune -print)
-if [[ $nested != ./PlugIns/QuickAction.appex ]]; then
-  printf 'error: build-release.sh signs only PlugIns/QuickAction.appex inside the app, and found:\n%s\n' \
+  -o -name '*.framework' -o -name '*.dylib' \) -prune -print | sort)
+if [[ $nested != $'./Frameworks/Sparkle.framework\n./PlugIns/QuickAction.appex' ]]; then
+  printf 'error: build-release.sh signs only Frameworks/Sparkle.framework and PlugIns/QuickAction.appex inside the app, and found:\n%s\n' \
     "$nested" >&2
   exit 1
 fi
@@ -76,13 +77,18 @@ entitlements "$app" "$out/quickUschovna.entitlements"
 [[ $(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$out/QuickAction.entitlements" \
   2> /dev/null) == true ]] || { echo "error: QuickAction.appex isn't sandboxed" >&2; exit 1; }
 
-# Inside out: the extension, then the app, whose seal covers the extension's new signature.
+# Inside out: the framework and the extension, then the app, whose seal covers their new
+# signatures. Only the framework itself is signed, the way Xcode signs it with an identity: its
+# helpers (Autoupdate, Updater.app) keep Sparkle's own ad-hoc signatures. Signed with the app's
+# identity, the framework passes the hardened runtime's check that a library comes from the same
+# team.
 # --timestamp=none, like Xcode's own signing with a development certificate: no trip to Apple.
 sign() { # <bundle> <entitlements file, if there is one>
   local options=(--force --sign "${identity:--}" --options runtime --timestamp=none)
-  [[ -f $2 ]] && options+=(--entitlements "$2")
+  [[ -f ${2:-} ]] && options+=(--entitlements "$2")
   codesign "${options[@]}" "$1"
 }
+sign "$framework"
 sign "$extension" "$out/QuickAction.entitlements"
 sign "$app" "$out/quickUschovna.entitlements"
 rm -f "$out/QuickAction.entitlements" "$out/quickUschovna.entitlements"
@@ -90,7 +96,7 @@ rm -f "$out/QuickAction.entitlements" "$out/quickUschovna.entitlements"
 codesign --verify --strict --deep "$app"
 # What each part was signed with. Not the certificate's name: it holds an email address, and the
 # workflow's logs are public.
-for code in "$app" "$extension"; do
+for code in "$app" "$extension" "$framework"; do
   details=$(codesign -dv "$code" 2>&1)
   flags=$(sed -nE 's/^CodeDirectory .*flags=0x[0-9a-f]+\(([^)]*)\).*/\1/p' <<< "$details")
   [[ ,$flags, == *,runtime,* ]] || { echo "error: $code doesn't have the hardened runtime" >&2; exit 1; }

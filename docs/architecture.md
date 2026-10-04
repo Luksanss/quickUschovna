@@ -102,6 +102,41 @@ Launch Services, which launches it if needed, delivers them in one `application(
 (`quickUschovna/App/QuickActionReceiver.swift`), and lets the non-sandboxed app read Desktop,
 Documents and Downloads without a prompt. Details and the manual test: `docs/quick-action.md`.
 
+## Updates (added 2026-10-04)
+
+`docs/spec.md` § Updates says what it does. It's betterTab's updater:
+[Sparkle](https://github.com/sparkle-project/Sparkle) 2.10.0 (MIT) as a Swift package pinned to
+that exact version. `quickUschovna/App/Updater.swift` is the whole of our side;
+`quickUschovna/Info.plist` holds Sparkle's settings and is merged into the generated Info.plist.
+- **Only on request.** `SUEnableAutomaticChecks` is NO, so Sparkle never checks or asks to, and
+  `SUAllowsAutomaticUpdates` NO removes its "install automatically" checkbox. The panel's row calls
+  `AppModel.checkForUpdates`, which closes the panel and calls `onCheckForUpdates`; `AppDelegate`
+  points that at `Updater` in Release builds only, so a Debug build beeps instead of replacing
+  itself. Sparkle's controller isn't created until the first check, so nothing runs in the
+  background.
+- **Not during a send.** Install and Relaunch quits the app. `Updater` is Sparkle's delegate and
+  postpones the relaunch (`updater(_:shouldPostponeRelaunchForUpdate:untilInvokingBlock:)`) while
+  `AppModel.queue` isn't empty, then goes ahead once `observe` sees it empty.
+- **What has to match.** The release workflow signs the disk image with an EdDSA key, and the app
+  carries the public half (`SUPublicEDKey`). `SUVerifyUpdateBeforeExtraction` makes Sparkle check
+  that signature before it unpacks anything; without it, a code signature matching the running app
+  would be enough. After unpacking, the new app's code signature must be valid.
+- **Replacing the app.** quickUschovna isn't sandboxed, and a copy dragged into `/Applications`
+  belongs to the user, so Sparkle's `Autoupdate` helper can replace it, Quick Action included.
+  Sparkle releases the new bundle from quarantine, so Gatekeeper shouldn't ask for Open Anyway
+  again; not yet tried.
+- **The feed.** `SUFeedURL` is `releases/latest/download/appcast.xml` on GitHub: each release
+  carries an appcast with one item, itself (`scripts/make-appcast.sh`). Its notes are Markdown,
+  which Sparkle draws in a text view, so no web page is loaded. The feed isn't signed: it's served
+  over HTTPS by GitHub, and anyone who could replace it could replace the release too.
+- **What it sends and saves.** Requests carry only `User-Agent: quickUschovna/<version>
+  Sparkle/<version>`; `SUEnableSystemProfiling` is NO. Sparkle writes `SUHasLaunchedBefore`,
+  `SULastCheckTime` and any skipped version to the app's defaults.
+- **Sparkle's helpers** (`Autoupdate`, `Updater.app`) keep Sparkle's ad hoc signatures inside the
+  framework; the release script signs the framework itself with our identity, so the app's
+  hardened runtime loads it (`docs/releasing.md` § Signing). The XPC services are only for
+  sandboxed apps and go unused.
+
 ## Testing without a mouse or Úschovna
 
 - `scripts/uschovna/run-tests.sh`: the client's real sources compiled with the app's settings,

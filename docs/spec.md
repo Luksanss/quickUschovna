@@ -66,6 +66,7 @@ or Esc closes it. It replaces any bubble.
   you send stay here for 14 days."
 - **Sender:** the address; a click edits it in place. Return or leaving the field saves a valid one.
 - **Launch at Login** (through `SMAppService`; the system owns the state).
+- **Check for Updates…** (§ Updates).
 - **Quit quickUschovna.** During an upload it asks first: "Quit while sending?".
 
 While the panel is open, a finished upload is confirmed in Recent ("✓ Link copied") instead of a
@@ -85,6 +86,28 @@ or the panel opens).
 - **Úschovna fails:** the package stays queued with Try Again, which resumes the same package when
   Úschovna still has it, until the user retries or cancels.
 
+## Updates
+
+Added 2026-10-04, after v1.0.47, at the maintainer's request, as betterTab has it. *Differs from the
+prototype,* which has no updater.
+- **Check for Updates…** in the panel closes it and asks GitHub for the latest release. It's the
+  only way an update starts: the app never checks by itself. The windows are
+  [Sparkle](https://sparkle-project.org)'s, in English.
+- **Already up to date:** "You're up to date!", with the version that's installed.
+- **A newer version:** a window shows its version and release notes, with Install Update, Remind
+  Me Later and Skip This Version. Install Update downloads it and checks its signature
+  (`docs/architecture.md` § Updates), then Install and Relaunch replaces the app where it's
+  installed and relaunches it. Skip This Version only affects automatic checks, which the app
+  doesn't make, so the next check shows that version again.
+- **While something is sending,** Install and Relaunch waits until the queue is empty, every
+  package sent or cancelled (a failed one too), then installs. Quitting would cut the upload off.
+- **If anything goes wrong** (offline, GitHub unreachable, a download that fails its check), a
+  dialog says what happened, and the installed copy keeps running unchanged.
+- **The new copy keeps** the sender, the links in Recent and Launch at Login, which belong to the
+  app's identifier, not to the copy.
+- **Debug builds** show the row, but it only beeps, so a dev build never replaces itself with a
+  release.
+
 ## For everything
 
 - Light and dark mode, the system accent colour, system materials and fonts. Animations 150 ms or
@@ -99,10 +122,11 @@ or the panel opens).
 The files go to Úschovna and nowhere else. The sender address is kept in the app's preferences on
 this Mac and sent only to Úschovna with each package. The history of links is kept in
 `~/Library/Application Support/quickUschovna/history.json` and only holds links that are still valid.
-No analytics, crash reporting or telemetry.
+Check for Updates… asks GitHub for the latest release, only when it's chosen, and sends no system
+profile. No analytics, crash reporting or telemetry.
 
 ## Out of scope
 
 A keyboard shortcut; recipients, a message or a subject; paying for Premium or signing in to
 Úschovna+; the download count; a main window, a Dock icon or onboarding; settings beyond the sender
-and Launch at Login; an in-app updater.
+and Launch at Login; automatic update checks.

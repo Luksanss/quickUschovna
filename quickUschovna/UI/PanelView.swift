@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The panel that opens on a click on the icon, including its chrome and shadow room. Top to
-/// bottom: what's sending, the links in Recent, then the sender address, Launch at Login and Quit.
+/// bottom: what's sending, the links in Recent, then the sender address, Launch at Login, Check for
+/// Updates… and Quit.
 struct PanelView: View {
     let model: AppModel
 
@@ -38,6 +39,12 @@ struct PanelView: View {
                         .offset(y: 0.5)
                 }
                 .padding(.horizontal, 10)
+            }
+            HoverRow(height: 28, action: model.checkForUpdates) {
+                Text("Check for Updates…")
+                    .surfaceFont(13)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
             }
             SurfaceSeparator()
             if model.isConfirmingQuit {

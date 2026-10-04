@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var dragMonitor: DragMonitor?
     #if DEBUG
     private var debugControl: DebugControl?
+    #else
+    /// Debug builds have no updater, so a dev build never replaces itself with a release.
+    private var updater: Updater?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -19,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.dragMonitor = dragMonitor
         #if DEBUG
         debugControl = DebugControl(model: model)
+        #else
+        let updater = Updater(model: model)
+        model.onCheckForUpdates = { [weak updater] in updater?.checkForUpdates() }
+        self.updater = updater
         #endif
     }
 
