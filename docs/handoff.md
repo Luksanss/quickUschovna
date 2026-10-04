@@ -43,29 +43,20 @@ ticket tracker; the next action below is the backlog.
 
 In this order; each step gates the next.
 
-1. **One manual send on the website, by the maintainer** (agents don't send; see Safety). One
-   small file, the maintainer's own address as sender, no recipients. It answers what the
-   research couldn't (Findings):
-   - Does the form accept no recipients?
-   - What does the sender page `/zasilka/{code}` show? Open its link in a private window: is it a
-     download page someone else can use, or a sender/admin view?
-   - How many downloads does that link allow? The price list sells "a link you can share
-     anywhere" as a Premium feature, so the free tier may only give per-recipient links.
-   - What does the control email contain?
-   If the free link can't be shared, the brief changes: send to a recipient address (e.g. a
-   second address of the maintainer's), pay per Premium package, or use Úschovna+.
-2. **Optionally, ask Úschovna** (info@uschovna.cz) whether a personal client is fine or whether
+1. **Optionally, ask Úschovna** (info@uschovna.cz) whether a personal client is fine or whether
    there's an API. The maintainer sends it; an agent may draft it.
-3. **Pick the client approach** (Findings): a native client of the website's AJAX upload
+2. **Pick the client approach** (Findings): a native client of the website's AJAX upload
    (fast, small, grey) or the real page driven in a hidden `WKWebView` (more defensible, heavier,
    breaks when their page changes). Either way, behind a small provider interface so an
-   official-API backend can replace Úschovna if it breaks or says no.
-4. **Design in Claude Design.** The menu-bar drop target and its states (idle, drag-over,
+   official-API backend can replace Úschovna if it breaks or says no. The agent recommended the
+   native client on 2026-10-04; not yet decided.
+3. **Design in Claude Design.** The menu-bar drop target and its states (idle, drag-over,
    uploading with progress, done with the link copied, error), and the one-time settings (sender
    email). As minimal as betterTab.
-5. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
-   first required check (Known gaps).
-6. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
+4. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
+   first required check (Known gaps). The first real send needs the maintainer's go-ahead
+   (Safety); use it to note how many downloads the sender's link allows (Findings).
+5. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
    `docs/releasing.md` (a push to `main` builds, signs and publishes a GitHub Release, with
    Sparkle for updates). The maintainer creates the `release` environment (Selected branches:
    `main` only) and sets its secrets; agents never handle keys. What carries over from betterTab:
@@ -82,6 +73,10 @@ In this order; each step gates the next.
 
 ## Decisions already settled
 
+- **The app's output is one link to share** (the maintainer, 2026-10-04): the package link
+  Úschovna gives the sender, put on the clipboard. No recipients and no message, so Úschovna
+  emails nobody but the sender's own control email. Sharing that link is how the maintainer
+  already uses Úschovna, e.g. for files too big for Discord.
 - **The repository is public from day one** (the maintainer, at setup). Everything committed is
   world-readable: no keys, tokens, certificates, personal addresses or Team IDs in the repo.
   Secrets live only in the GitHub `release` environment, which only `main` can use.
@@ -119,9 +114,12 @@ terms, `robots.txt`, the endpoint names and the price list were checked twice.
   An older multipart form (`/uploaded/{id}/`, field `f[]`) is still in the page. The only cookie
   is `PHPSESSID`. There's no captcha: no reCAPTCHA, hCaptcha or Turnstile in the page or the JS.
 - **No email verification in the client.** `/ajax/emailcheck` only checks that the address's
-  domain has a mail server. Whether the server checks more is unknown. **Recipients look
-  optional:** the JS asks for a sender address only when recipients are given (unconfirmed;
-  Next action 1).
+  domain has a mail server. Whether the server checks more is unknown. **Recipients are
+  optional:** the JS asks for a sender address only when recipients are given, and the
+  maintainer confirmed it from use on 2026-10-04.
+- **Still unknown: how many downloads the sender's link allows.** The free tier gives each
+  recipient's link 30. The price list sells a link to share anywhere as a Premium feature, which
+  suggests the sender's free link is limited too. It doesn't block the brief.
 - **The terms don't mention automation at all.** `https://www.uschovna.cz/vseobecne_podminky_uschovna`,
   effective 2014-11-01, operator TISCALI MEDIA, a.s.: nothing on bots, scripts, scraping,
   reverse engineering or third-party clients. Two clauses matter: unregistered users may use
@@ -155,7 +153,7 @@ terms, `robots.txt`, the endpoint names and the price list were checked twice.
   build (Debug and Release) becomes the required check: write the exact `xcodebuild` command into
   `CLAUDE.md` and `.claude/skills/handoff-update/SKILL.md` in that same commit, and add
   `Bash(xcodebuild *)` to that skill's `allowed-tools`.
-- **No CD and no `release` environment yet** (Next action 6).
+- **No CD and no `release` environment yet** (Next action 5).
 - **No licence.** betterTab has none either; it's the maintainer's call for a public repo.
 
 ## Safety constraints
