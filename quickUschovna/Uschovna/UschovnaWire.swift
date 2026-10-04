@@ -81,14 +81,86 @@ nonisolated enum UschovnaWire {
         return (try? JSONSerialization.jsonObject(with: Data(bytes), options: [.fragmentsAllowed])) as? [String: Any]
     }
 
-    /// Whether the answer parses as JSON at all, which is all `/ajax/test_xss` has to do.
-    static func isJSON(_ data: Data) -> Bool {
+    /// Any JSON value, which is all `/ajax/test_xss` has to answer with.
+    static func json(_ data: Data) -> Any? {
         var bytes = data[...]
         if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes = bytes.dropFirst(3) }
-        return (try? JSONSerialization.jsonObject(with: Data(bytes), options: [.fragmentsAllowed])) != nil
+        return try? JSONSerialization.jsonObject(with: Data(bytes), options: [.fragmentsAllowed])
     }
 
-    /// A number the page compares loosely (`1 == e.status`), so `1` and `"1"` both count.
+    /// Whether the page's loose comparison `number == value` holds for a value from Úschovna's
+    /// JSON. The page compares every `status` and `res` with `==`, so `true`, `"1"` and `1` all
+    /// count as 1 (the real `package_target` answers `"status": true`), and `false`, `""` and
+    /// `"0"` as 0. `null` and a missing value equal no number.
+    static func looselyEquals(_ value: Any?, _ number: Double) -> Bool {
+        javaScriptNumber(value) == number
+    }
+
+    /// JavaScript's `ToNumber` for what JSON can hold: booleans are 1 and 0, strings are parsed as
+    /// JavaScript parses them (trimmed, empty is 0, hex with `0x`, anything else is NaN), an array
+    /// becomes its joined text first. Nil for null, a missing value, and NaN.
+    static func javaScriptNumber(_ value: Any?) -> Double? {
+        switch value {
+        case nil, is NSNull:
+            return nil
+        case let number as NSNumber where CFGetTypeID(number) == CFBooleanGetTypeID():
+            return number.boolValue ? 1 : 0
+        case let number as NSNumber:
+            return number.doubleValue.isNaN ? nil : number.doubleValue
+        case let string as String:
+            return javaScriptNumber(parsing: string)
+        case let array as [Any]:
+            // `[x] == 1` compares `String([x])`, which is `x`'s text; `[] == 0` holds.
+            switch array.count {
+            case 0: return 0
+            case 1: return array[0] is [Any] || array[0] is [String: Any] ? nil : javaScriptNumber(parsing: javaScriptText(array[0]))
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    private static func javaScriptNumber(parsing text: String) -> Double? {
+        // JavaScript trims its whitespace and line terminators, NBSP and BOM included.
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}")))
+        if trimmed.isEmpty { return 0 }
+        if let match = trimmed.wholeMatch(of: /0[xX]([0-9a-fA-F]+)|0[oO]([0-7]+)|0[bB]([01]+)/) {
+            let (digits, radix) = match.1.map { ($0, 16) } ?? match.2.map { ($0, 8) } ?? (match.3!, 2)
+            return UInt64(digits, radix: radix).map { Double($0) }
+        }
+        switch trimmed {
+        case "Infinity", "+Infinity": return .infinity
+        case "-Infinity": return -.infinity
+        default: break
+        }
+        guard trimmed.wholeMatch(of: /[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?/) != nil else { return nil }
+        return Double(trimmed)
+    }
+
+    /// JavaScript's `String(x)` for a JSON scalar.
+    private static func javaScriptText(_ value: Any) -> String {
+        switch value {
+        case is NSNull: ""
+        case let number as NSNumber where CFGetTypeID(number) == CFBooleanGetTypeID(): number.boolValue ? "true" : "false"
+        case let number as NSNumber: number.stringValue
+        case let string as String: string
+        default: "\(value)"
+        }
+    }
+
+    /// A JSON value as JSON would write it, for logs and failure details: `true`, `"1"`, `1`.
+    static func describe(_ value: Any?) -> String {
+        guard let value else { return "nothing" }
+        if JSONSerialization.isValidJSONObject([value]),
+           let data = try? JSONSerialization.data(withJSONObject: [value], options: [.fragmentsAllowed]),
+           let text = String(data: data, encoding: .utf8) {
+            return String(text.dropFirst().dropLast())
+        }
+        return "\(value)"
+    }
+
+    /// A number the page uses as a number, like `usize`: a JSON number, or a string of digits.
     static func integer(_ value: Any?) -> Int64? {
         switch value {
         case let number as NSNumber where CFGetTypeID(number) != CFBooleanGetTypeID():
@@ -110,12 +182,23 @@ nonisolated enum UschovnaWire {
         }
     }
 
-    /// A package code. The page treats a missing one and `0` alike: no package.
+    /// A package code. The page checks `0 != e.code`, loosely, so `0`, `"0"`, `""` and `false`
+    /// all mean "no package"; a code that isn't text or a number isn't one either.
     static func code(_ value: Any?) -> String? {
         guard let text = text(value)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty, text != "0"
+              !text.isEmpty, !looselyEquals(value, 0)
         else { return nil }
         return text
+    }
+
+    /// `"error" == answer`: the page's test for a failed synchronous call, which also holds for an
+    /// answer that is the JSON string `"error"` (or `["error"]`).
+    static func isJavaScriptError(_ value: Any?) -> Bool {
+        switch value {
+        case let string as String: string == "error"
+        case let array as [Any]: array.count == 1 && (array[0] as? String) == "error"
+        default: false
+        }
     }
 
     /// `"1.1.85"` from the send page's `uschovna.js?v1.1.85`.

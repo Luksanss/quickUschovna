@@ -67,6 +67,24 @@ Steps 1, 2, 3, 5 and 6 go through one helper (`ajax_dotaz`), a jQuery 1.11.0 `$.
 The chunk upload (step 4) is a plain `XMLHttpRequest` and sets `X-Requested-With` itself, on any
 origin.
 
+### The answers are compared loosely
+
+Every check the page makes on a value in Úschovna's answers uses JavaScript's loose `==` or `!=`,
+never `===`. The only strict checks are on whether a field is there at all (`void 0 === s.status`):
+
+| Step | The page's check |
+|---|---|
+| 1 `package_target` | `void 0 === s.status \|\| 1 != s.status` fails it |
+| 2 `test_xss` | `"error" == answer` falls back to the site |
+| 3 create | `1 == e.status`, then `0 != code` |
+| 4 chunk | `1 == a.res`, else `2 == a.res`, else fatal (`200 == xhr.status` compares the HTTP status) |
+| 6 finish | `void 0 !== e.status && 1 == e.status && 0 != e.code` |
+
+So `1 == x` holds for `1`, `true`, `"1"`, `" 1 "`, `"1.0"`, `"0x1"` and `[1]`. And `0 != code`
+fails for `0`, `false`, `""` and `"0"`: all of those mean "no package". **The real server answers
+`package_target` with `"status": true`** (seen on 2026-10-04), so this isn't academic. The client
+mirrors JavaScript's `ToNumber` for every one of these checks (`UschovnaWire.looselyEquals`).
+
 ## 1. `POST /ajax/package_target/` (site)
 
 Sent synchronously when Send is clicked, before anything else.
@@ -76,7 +94,8 @@ Sent synchronously when Send is clicked, before anything else.
 | `filenames[]` | Each file's name, in the order they were added. |
 | `size` | The files' total size in bytes. |
 
-Answer: JSON. `status` must be `1`, or the page alerts "Vyskytla se chyba na straně serveru"
+Answer: JSON, e.g. `{"status": true, "name": "www307.uschovna.cz"}` (the real answer's shape, with
+the host it named). `status` must be loosely 1, or the page alerts "Vyskytla se chyba na straně serveru"
 ("a server error occurred") and stops. `name`, if present, is the upload host: the page uses
 `location.protocol + "//" + name` as the base for steps 2–4. Without `name`, everything goes to
 the site. No retry.
@@ -304,7 +323,9 @@ timestamp. The harness fails a scenario on any of them.
 
 Faults can be set per scenario (`POST /__control`) or on the command line for trying the app by
 hand: `--drop-chunk N`, `--lose-response-chunk N`, `--stall-chunk N`, `--http500-chunk N`,
-`--fatal-chunk N`, `--slow-kbps K`, `--test-xss-fails`, `--no-upload-host`, `--link-style …`.
+`--fatal-chunk N`, `--slow-kbps K`, `--test-xss-fails`, `--no-upload-host`, `--link-style …`, and
+`--answers real|bool|number|string` for how `status` and `res` are written (`real`, the default,
+answers `package_target` with `true` as the real server does).
 Run `scripts/uschovna/mock_server.py --help`, and point a debug build's `UschovnaService` at
 `http://127.0.0.1:8780`.
 

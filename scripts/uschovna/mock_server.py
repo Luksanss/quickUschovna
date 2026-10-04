@@ -33,6 +33,22 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SCRIPT_VERSION = "1.1.85"
+DEFAULT_ANSWERS = {
+    "package_target_status": True,
+    "test_xss": {"status": 1},
+    "create_status": 1,
+    "finish_status": 1,
+    "res1": 1,
+    "res2": 2,
+}
+ANSWER_STYLES = {
+    # As the real server answered package_target on 2026-10-04; the rest as numbers.
+    "real": {},
+    "bool": {"package_target_status": True, "create_status": True, "finish_status": True, "res1": True},
+    "number": {"package_target_status": 1},
+    "string": {"package_target_status": "1", "create_status": " 1", "finish_status": "1.0",
+               "res1": "1", "res2": "2"},
+}
 MAIL_SUBJECT = "zásilka služby Úschovna.cz"
 
 
@@ -47,6 +63,9 @@ class State:
             "test_xss_fails": False,
             "no_upload_host": False,
             "link_style": "same",
+            # The values the mock answers with where the page compares loosely (`1 == e.status`).
+            # The real package_target answers `"status": true`; the others haven't been seen.
+            "answers": dict(DEFAULT_ANSWERS),
         }
         self.www_origin = ""
         self.upload_host = ""
@@ -93,6 +112,10 @@ class State:
 
 
 STATE: State = None  # set in main()
+
+
+def answer(name):
+    return STATE.settings["answers"].get(name, DEFAULT_ANSWERS[name])
 
 
 def check_agent(endpoint, entry):
@@ -309,17 +332,17 @@ class Handler(BaseHTTPRequestHandler):
         if not names:
             STATE.error("package_target: no filenames[]")
         STATE.targets.append({"session": entry["cookie"], "filenames": names, "size": size})
-        answer = {"status": 1}
+        reply = {"status": answer("package_target_status")}
         if not STATE.settings["no_upload_host"]:
-            answer["name"] = STATE.upload_host
-        self.send_json(answer)
+            reply["name"] = STATE.upload_host
+        self.send_json(reply)
 
     def test_xss(self):
         entry = self.record("test_xss")
         self.check_browser_headers("test_xss", entry, jquery=True)
         if STATE.settings["test_xss_fails"]:
             return self.send(200, "<html>no</html>", "text/html")
-        self.send_json({"status": 1})
+        self.send_json(answer("test_xss"))
 
     def zalozeni_zasilky(self, body):
         fields = self.form(body)
@@ -362,7 +385,7 @@ class Handler(BaseHTTPRequestHandler):
             "files": {},
             "finished": False,
         }
-        self.send_json({"status": 1, "code": code})
+        self.send_json({"status": answer("create_status"), "code": code})
 
     def finish(self, fields):
         entry = self.record("finish")
@@ -392,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
             link = f"{STATE.www_origin}/zasilka/{package['share_code']}"
             STATE.links.append(link)
             print(f"share link: {link}", flush=True)
-        self.send_json({"status": 1, "code": package["share_code"]})
+        self.send_json({"status": answer("finish_status"), "code": package["share_code"]})
 
     def still_alive(self, body):
         entry = self.record("still_alive")
@@ -564,14 +587,14 @@ class Handler(BaseHTTPRequestHandler):
         record["received"] = offset + len(body)
 
         if record["received"] < size:
-            return {"res": 1, "usize": record["received"], "tmp": tmp}
+            return {"res": answer("res1"), "usize": record["received"], "tmp": tmp}
         folder = os.path.join(STATE.store, package["code"])
         os.makedirs(folder, exist_ok=True)
         final = os.path.join(folder, name.replace("/", "_"))
         os.replace(record["path"], final)
         package["files"][name] = {"size": size, "path": final, "complete": True}
         del STATE.tmps[tmp]
-        return {"res": 2}
+        return {"res": answer("res2")}
 
 
 def snapshot():
@@ -628,6 +651,10 @@ def main():
     parser.add_argument("--link-style", default="same",
                         choices=["same", "canonical", "anchor", "foreign", "unrelated", "none"],
                         help="what the package page shows as its package link")
+    parser.add_argument("--answers", default="real", choices=sorted(ANSWER_STYLES),
+                        help="how status and res values are written: as the real server was seen to "
+                             "(package_target status true, the rest numbers), all booleans, all numbers, "
+                             "or numeric strings")
     parser.add_argument("--verbose", action="store_true", help="log every request")
     ARGS = parser.parse_args()
 
@@ -639,6 +666,7 @@ def main():
         "test_xss_fails": ARGS.test_xss_fails,
         "no_upload_host": ARGS.no_upload_host,
         "link_style": ARGS.link_style,
+        "answers": dict(DEFAULT_ANSWERS, **ANSWER_STYLES[ARGS.answers]),
     })
     rules = []
     if ARGS.drop_chunk:

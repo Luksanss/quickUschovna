@@ -40,7 +40,8 @@ enum Mock {
 
     /// Clears everything and sets the faults and settings for one scenario.
     static func reset(rules: [[String: Any]] = [], settings: [String: Any] = [:]) async throws {
-        let defaults: [String: Any] = ["slow_kbps": 0, "test_xss_fails": false, "no_upload_host": false, "link_style": "same"]
+        let defaults: [String: Any] = ["slow_kbps": 0, "test_xss_fails": false, "no_upload_host": false, "link_style": "same",
+                                       "answers": [String: Any]()]
         try await control(["reset": true, "rules": rules, "settings": defaults.merging(settings) { $1 }])
     }
 
@@ -427,7 +428,7 @@ scenarios.append(("fatal res, then Try Again starts over", {
     guard case .failure(UploadFailure.notAnswering(let detail)) = first else {
         throw Failure(description: "expected UploadFailure.notAnswering, got \(first)")
     }
-    try expect(detail.contains("res=0"), "the detail doesn't name the res: \(detail)")
+    try expect(detail.contains("res 0"), "the detail doesn't name the res: \(detail)")
     try await Mock.rules([])
     let log = EventLog()
     _ = try await run(session, log).get()
@@ -550,6 +551,57 @@ scenarios.append(("the link the package page shows", {
             try expect(link == built, "\(style): got \(link), expected \(built)")
         }
     }
+}))
+
+scenarios.append(("loose equality like JavaScript", {
+    // What `1 == x` and `0 == x` give in JavaScript, for values JSON can hold.
+    let cases: [(Any?, Double, Bool)] = [
+        (true, 1, true), (false, 0, true), (true, 2, false), (NSNumber(value: 1), 1, true), (NSNumber(value: 1.0), 1, true),
+        ("1", 1, true), (" 1\n", 1, true), ("1.0", 1, true), ("+1", 1, true), ("1e0", 1, true), (".1e1", 1, true),
+        ("0x1", 1, true), ("0b1", 1, true), ("0o1", 1, true), ("2", 2, true), ("", 0, true), ("  ", 0, true),
+        ("0", 0, true), ("-0", 0, true), ([Any](), 0, true), ([1] as [Any], 1, true), (["1"] as [Any], 1, true),
+        ([true] as [Any], 1, false), ([1, 2] as [Any], 1, false), ("1abc", 1, false), ("abc", 1, false), ("true", 1, false),
+        ("1_0", 10, false), ("Infinity", 1, false), (NSNull(), 0, false), (nil, 0, false), (["a": 1] as [String: Any], 1, false),
+    ]
+    for (value, number, expected) in cases {
+        try expect(UschovnaWire.looselyEquals(value, number) == expected,
+                   "\(UschovnaWire.describe(value)) == \(number) should be \(expected)")
+    }
+    try expect(UschovnaWire.code("0") == nil && UschovnaWire.code(false) == nil && UschovnaWire.code("") == nil,
+               "a code loosely equal to 0 should be no code")
+    try expect(UschovnaWire.code("ABCDEFGH23456789") == "ABCDEFGH23456789" && UschovnaWire.code(123) == "123", "a real code was refused")
+    try expect(UschovnaWire.describe(true) == "true" && UschovnaWire.describe("1") == "\"1\"", "describe: \(UschovnaWire.describe(true))")
+}))
+
+scenarios.append(("answers written as booleans or strings", {
+    let styles: [[String: Any]] = [
+        ["package_target_status": true, "create_status": true, "finish_status": true, "res1": true],
+        ["package_target_status": "1", "create_status": " 1", "finish_status": "1.0", "res1": "1", "res2": "2"],
+        ["test_xss": "fine", "res2": [2]],
+    ]
+    for answers in styles {
+        try await Mock.reset(settings: ["answers": answers])
+        let file = try await makeRandomFile("loose.bin", bytes: 400_000)
+        let result = await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog())
+        guard case .success = result else { throw Failure(description: "\(answers): \(result)") }
+        let state = try await Mock.state()
+        try await expectDelivered([file], state)
+        try expect(state.packages.first?["role"] as? String == "upload", "\(answers): the upload host wasn't used")
+    }
+    // And the ones that mean no: status false, a code of "0", test_xss answering "error".
+    for (answers, detail) in [(["create_status": false], "status false"), (["finish_status": "0"], "status \"0\""),
+                              (["package_target_status": NSNull()], "status null")] as [([String: Any], String)] {
+        try await Mock.reset(settings: ["answers": answers])
+        let file = try await makeRandomFile("no.bin", bytes: 1000)
+        let result = await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog())
+        guard case .failure(UploadFailure.notAnswering(let message)) = result, message.contains(detail) else {
+            throw Failure(description: "\(answers): expected a refusal naming \(detail), got \(result)")
+        }
+    }
+    try await Mock.reset(settings: ["answers": ["test_xss": "error"]])
+    let file = try await makeRandomFile("xss.bin", bytes: 1000)
+    _ = try await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog()).get()
+    try expect(try await Mock.state().packages.first?["role"] as? String == "www", "test_xss answering \"error\" should mean the site")
 }))
 
 scenarios.append(("nothing to send", {

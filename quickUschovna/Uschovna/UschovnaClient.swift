@@ -125,8 +125,9 @@ final class UschovnaClient {
         let fields = names.map { ("filenames[]", $0) } + [("size", String(totalBytes))]
         let request = ajax(site, "/ajax/package_target/", fields)
         let object = try await json(request, step: "package_target")
-        guard UschovnaWire.integer(object["status"]) == 1 else {
-            throw .refused("package_target answered status \(describe(object["status"]))")
+        // `void 0 === s.status || 1 != s.status` fails it: a status must be there, and loosely 1.
+        guard UschovnaWire.looselyEquals(object["status"], 1) else {
+            throw .refused("package_target answered status \(UschovnaWire.describe(object["status"]))")
         }
         return object["name"] as? String
     }
@@ -138,7 +139,11 @@ final class UschovnaClient {
         let request = ajax(host, "/ajax/test_xss", [("test", "test")])
         let (data, response) = try await send(request, step: "test_xss")
         try check(response, step: "test_xss")
-        guard UschovnaWire.isJSON(data) else { throw .server("test_xss answered something that isn't JSON", retry: false) }
+        guard let answer = UschovnaWire.json(data) else {
+            throw .server("test_xss answered something that isn't JSON", retry: false)
+        }
+        // The page's failed call returns "error", and it checks with `==`, so that answer fails too.
+        guard !UschovnaWire.isJavaScriptError(answer) else { throw .server("test_xss answered \"error\"", retry: false) }
     }
 
     /// `POST {host}/ajax/zalozeni_zasilky`: creates the package with the page's form as this app
@@ -154,8 +159,9 @@ final class UschovnaClient {
             ("language_to", UschovnaWire.mailLanguage),
         ]
         let object = try await json(ajax(host, "/ajax/zalozeni_zasilky", fields), step: "zalozeni_zasilky")
-        guard UschovnaWire.integer(object["status"]) == 1, let code = UschovnaWire.code(object["code"]) else {
-            throw .refused("zalozeni_zasilky answered status \(describe(object["status"])) without a package code")
+        // `1 == e.status`, then `0 != code`.
+        guard UschovnaWire.looselyEquals(object["status"], 1), let code = UschovnaWire.code(object["code"]) else {
+            throw .refused("zalozeni_zasilky answered status \(UschovnaWire.describe(object["status"])) without a package code")
         }
         return code
     }
@@ -195,17 +201,15 @@ final class UschovnaClient {
         guard let object = UschovnaWire.jsonObject(data) else {
             throw .server("ajax_upload answered something that isn't JSON (\(data.count) bytes)", retry: true)
         }
-        switch UschovnaWire.integer(object["res"]) {
-        case 1:
+        // `1 == a.res`, then `2 == a.res`.
+        if UschovnaWire.looselyEquals(object["res"], 1) {
             guard let next = UschovnaWire.integer(object["usize"]) else {
-                throw .server("ajax_upload answered res=1 without a usable usize", retry: false)
+                throw .server("ajax_upload answered res 1 without a usable usize", retry: false)
             }
             return (.next(offset: next, tmp: UschovnaWire.text(object["tmp"])), elapsed)
-        case 2:
-            return (.fileDone, elapsed)
-        default:
-            return (.refused("ajax_upload answered res=\(describe(object["res"]))"), elapsed)
         }
+        if UschovnaWire.looselyEquals(object["res"], 2) { return (.fileDone, elapsed) }
+        return (.refused("ajax_upload answered res \(UschovnaWire.describe(object["res"]))"), elapsed)
     }
 
     /// `POST /ajax/still_alive` on the site, which the page sends once every 12 hours of uploading.
@@ -225,8 +229,9 @@ final class UschovnaClient {
     func finish(package: String) async throws(UploadTrouble) -> String {
         let fields = [("package_code", package), ("dokoncit", "true")]
         let object = try await json(ajax(site, "/ajax/zalozeni_zasilky", fields), step: "dokoncit")
-        guard UschovnaWire.integer(object["status"]) == 1, let code = UschovnaWire.code(object["code"]) else {
-            throw .refused("Finishing answered status \(describe(object["status"])) without a code")
+        // `void 0 !== e.status && 1 == e.status && 0 != e.code`.
+        guard UschovnaWire.looselyEquals(object["status"], 1), let code = UschovnaWire.code(object["code"]) else {
+            throw .refused("Finishing answered status \(UschovnaWire.describe(object["status"])) without a code")
         }
         return code
     }
@@ -328,10 +333,6 @@ final class UschovnaClient {
     private func isUschovna(_ origin: WebOrigin) -> Bool {
         let domain = site.host.hasPrefix("www.") ? String(site.host.dropFirst(4)) : site.host
         return origin.host == site.host || origin.host == domain || origin.host.hasSuffix("." + domain)
-    }
-
-    private func describe(_ value: Any?) -> String {
-        value.map { "\($0)" } ?? "nothing"
     }
 
     private static func milliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
