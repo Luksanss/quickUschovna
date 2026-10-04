@@ -48,6 +48,11 @@ final class DragMonitor {
         guard !urls.isEmpty else { return }
         isDragging = true
         model.drag = DragSummary(label: Format.packageLabel(for: urls), bytes: nil)
+        // Until the drop, the files aren't ours to read. A file's size is metadata, which macOS
+        // allows, but measuring a folder means listing it, and in Desktop, Documents or Downloads
+        // that would raise a permission prompt in the middle of the drag. So a drag with folders
+        // shows its label only; the drop itself grants access, and the size is checked then.
+        guard !urls.contains(where: FileMeasure.isDirectory) else { return }
         measuring = Task {
             let bytes = await FileMeasure.totalSize(of: urls)
             guard !Task.isCancelled, self.isDragging else { return }
