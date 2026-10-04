@@ -1,3 +1,5 @@
+<img src="design/icon/AppIcon.png" width="128" alt="quickUschovna's icon: a parcel with an up arrow">
+
 # quickUschovna
 
 Drop files on the menu bar, get an [Úschovna](https://www.uschovna.cz) link.
@@ -9,6 +11,18 @@ does it in one move: drag files onto its icon, and when the upload finishes the 
 clipboard. You type your email once, in its settings.
 
 **Status: not built yet.** It's being designed. There's nothing to download.
+
+## Install
+
+1. Download the `.dmg` from [the latest release](https://github.com/Luksanss/quickUschovna/releases/latest),
+   open it, and drag quickUschovna onto Applications.
+2. Open it. The first time, macOS blocks it because it isn't notarized: go to System Settings →
+   Privacy & Security and click Open Anyway.
+
+It needs macOS 27.
+
+quickUschovna doesn't check for updates itself. To update, download the latest release the same
+way and replace the app in Applications.
 
 ## How it uses Úschovna
 
