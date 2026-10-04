@@ -23,14 +23,17 @@ measuring and zipping files, and the client's reads and requests.
 ## The menu bar and the surfaces
 
 - **`StatusItemController`**: a fixed 32 pt `NSStatusItem` (the prototype's item, so the wider
-  drag-over image doesn't push neighbours). A click toggles the panel; drops on it go through
-  `FileDrop`, which takes the dragging-destination calls the status bar window forwards to its
-  delegate.
+  drag-over image doesn't push neighbours). A click toggles the panel; drags and drops on it go
+  through `FileDrop`, which takes the dragging-destination calls the status bar window forwards to
+  its delegate. A file drag reaching it calls `AppModel.dragOverIcon`, which opens the drop zone
+  (`AppModel.isDropZoneOpen`) for the rest of the drag. It also says where the surfaces hang
+  (`surfaceAnchor`) and the area near it where a drag opens the zone (`dropZoneApproach`).
 - **`SurfacePresenter`**: three `Surface`s, the drop zone, the bubble and the panel, each a
   `SurfaceWindow` (a borderless, non-activating, transparent `NSPanel` at `.statusBar` level on all
   Spaces) with a fresh `SurfaceHostingView` each time it's shown, so the view's entrance plays.
   The hosting view reports size changes and the window grows downwards, its top pinned 6 pt under
-  the menu bar and its left 8 pt left of the item, clamped 8 pt inside the screen (`SurfaceMetrics`).
+  the menu bar and its left 8 pt left of the item, clamped 8 pt inside the screen
+  (`StatusItemController.surfaceAnchor`, `SurfaceMetrics`).
   - **The views draw their own shadow**, so a window is bigger than its surface by
     `SurfaceMetrics.shadowInsets`. A window takes the mouse only over the surface itself
     (`SurfaceWindow.updateMouseHandling`, driven by mouse-moved and dragged monitors); otherwise
@@ -38,11 +41,13 @@ measuring and zipping files, and the client's reads and requests.
   - **Keyboard:** only the panel and the first-run bubble become key (non-activating, so the front
     app stays active). Esc goes through a local key monitor to `AppModel.escape()`.
   - **Clicks elsewhere:** a global mouse-down monitor calls `AppModel.clickedOutside()`.
-- **`DragMonitor`**: opens the drop zone for file drags anywhere. Global mouse monitors need no
-  permission; a changed drag-pasteboard count since mouse-down means a drag started, and only file
-  URLs count. A folder isn't measured until it's dropped (`docs/spec.md` § Ways in, and Findings in
-  `docs/handoff.md`). The zone stays 300 ms after the mouse goes up, because the drop is delivered
-  just after.
+- **`DragMonitor`**: follows file drags anywhere (`AppModel.drag`), opens the zone when one comes
+  near the icon (`StatusItemController.dropZoneApproach`; a drag that starts there has to leave it
+  first), and closes it when the drag ends. Global mouse monitors need no permission, and during a
+  drag they get its dragged events; a changed drag-pasteboard count since mouse-down means a drag
+  started, and only file URLs count. A folder isn't measured until it's dropped (`docs/spec.md` § Ways in, and Findings in
+  `docs/archive/handoffs/2026-10-04.md`). The zone stays 300 ms after the mouse goes up, because
+  the drop is delivered just after.
 
 ## The views
 

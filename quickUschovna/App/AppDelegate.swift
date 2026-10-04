@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusItem = StatusItemController(model: model)
         self.statusItem = statusItem
         surfaces = SurfacePresenter(model: model, statusItem: statusItem)
-        let dragMonitor = DragMonitor(model: model)
+        let dragMonitor = DragMonitor(model: model, statusItem: statusItem)
         dragMonitor.start()
         self.dragMonitor = dragMonitor
         #if DEBUG
