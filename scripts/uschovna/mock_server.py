@@ -658,6 +658,13 @@ def handler_for(role):
 class Server(ThreadingHTTPServer):
     daemon_threads = True
 
+    def server_bind(self):
+        # A fixed, modest receive buffer, inherited by every accepted connection. Over loopback the
+        # kernel would otherwise grow it to megabytes and swallow a whole chunk at once, which no
+        # slow uplink does; with it, the client's sending is paced by --slow-kbps as on a real link.
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 128 * 1024)
+        super().server_bind()
+
     def handle_error(self, request, client_address):
         # A client hanging up on a kept-alive connection, or mid-body after a fault, is normal here.
         error = sys.exc_info()[1]

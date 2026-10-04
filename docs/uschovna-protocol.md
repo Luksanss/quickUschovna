@@ -279,6 +279,7 @@ Where it deliberately differs:
   `run`) continues from there. HTTP 5xx, 408, 429 and answers that aren't JSON are retried; other
   4xx on the non-chunk calls aren't. The page doesn't retry steps 1, 3 and 6 at all; the client
   retries them the same way, since a lost answer there would otherwise lose the whole upload.
+  Each retry is announced with `.connecting(sent:)`.
 - **Requests have a timeout**: 60 s in which URLSession sees nothing move counts as a dropped
   connection. The kernel's socket buffers take a whole chunk at once, so for a chunk that's
   roughly the time from handing it over to the answer; chunks are sized to take about 5 s, which
@@ -306,10 +307,23 @@ Where it deliberately differs:
 - **It refuses up front** what the page wouldn't send as a free package: nothing but empty files,
   more than 1000 files, or more than 30 GiB. A file that's missing or changed size since the drop
   is refused too.
-- **Progress** is the bytes Úschovna has confirmed (`usize`), across files, at most 10 events a
-  second plus one at the end of each file. It moves once per chunk, and chunks are sized to take
-  about 5 s, so a UI wanting a smooth ring has to interpolate (the model already has
-  `bytesPerSecond`).
+- **Progress moves during a chunk**, as the page's own ring does from the XHR's upload events.
+  `.progress(sent:)` is what Úschovna has confirmed plus the chunk in flight, at most 10 events a
+  second plus one at the end of each file, never past the package's total.
+  - The in-flight part can't be read straight off URLSession. Its `didSendBodyData` counts bytes
+    handed to the system, which reports a body in 1 MiB steps and whose socket buffers (autotuned
+    up to 4 MB on macOS 27) can take megabytes of a chunk at once. That count is only an upper
+    bound.
+  - So the chunk's progress is what's been handed over, but no faster than the speed the last
+    chunk was confirmed at (the same measure that sizes chunks), ticked 10 times a second while
+    the chunk is out. Before a speed is known (the first chunk, and after a lost connection), it's
+    what's been handed over.
+  - Progress never goes back, except when a chunk is sent again. Before any resend (a lost
+    connection or a server error) the client reports `.connecting(sent:)`, after
+    `.waitingForNetwork(sent:)` for a lost connection, with the confirmed count, and in-flight
+    progress then starts from there.
+  - URLSession's reports arrive on its own queue and reach the main actor at most 10 times a
+    second.
 - The send page's `uschovna.js?v…` version is checked on every new package. A version other than
   1.1.85 is logged as a warning (the first sign the protocol may have moved) but doesn't stop the
   upload.
@@ -330,7 +344,9 @@ Python mock of every endpoint above. The mock plays the site and an upload host 
 stores the uploaded bytes, and records every deviation from the protocol: wrong offsets, sizes or
 file order, an `X_NAME` that isn't `encodeURIComponent`, cookies sent to the upload host, missing
 or extra `X-Requested-With`, a wrong `Origin` or `Referer`, upload-task headers, a missing
-timestamp. The harness fails a scenario on any of them.
+timestamp. The harness fails a scenario on any of them. The mock's sockets get a fixed 128 KB
+receive buffer, so that with `--slow-kbps` the client's sending is paced the way a slow uplink paces
+it, instead of loopback swallowing a whole chunk.
 
 Faults can be set per scenario (`POST /__control`) or on the command line for trying the app by
 hand: `--drop-chunk N`, `--lose-response-chunk N`, `--stall-chunk N`, `--http500-chunk N`,

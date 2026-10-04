@@ -1,5 +1,6 @@
 import Foundation
 import os
+import Synchronization
 
 /// What went wrong with one request, sorted by what the upload should do about it.
 nonisolated enum UploadTrouble: Error {
@@ -168,8 +169,9 @@ final class UschovnaClient {
 
     /// `POST {host}/ajax/ajax_upload/{ms}`: one chunk of one file as the raw body, described by the
     /// page's `X_*` headers. Returns the answer and how long it took, for the next chunk's size.
+    /// `progress` hears how much of the body has gone out while the request runs.
     func uploadChunk(on host: WebOrigin, package: String, name: String, fileSize: Int64, offset: Int64,
-                     tmp: String, body: Data) async throws(UploadTrouble) -> (ChunkReply, Duration) {
+                     tmp: String, body: Data, progress: SentBytesDelegate? = nil) async throws(UploadTrouble) -> (ChunkReply, Duration) {
         var request = URLRequest(url: host.url("/ajax/ajax_upload/\(Self.milliseconds())"))
         request.httpMethod = "POST"
         let sameOrigin = host == site
@@ -191,7 +193,7 @@ final class UschovnaClient {
         request.httpBody = body
 
         let started = ContinuousClock.now
-        let (data, response) = try await send(request, step: "ajax_upload")
+        let (data, response) = try await send(request, delegate: progress, step: "ajax_upload")
         let elapsed = ContinuousClock.now - started
         // The page retries anything but a 200, whatever it is.
         guard response.statusCode == 200 else {
@@ -316,11 +318,12 @@ final class UschovnaClient {
         return object
     }
 
-    private func send(_ request: URLRequest, step: String) async throws(UploadTrouble) -> (Data, HTTPURLResponse) {
+    private func send(_ request: URLRequest, delegate: (any URLSessionTaskDelegate)? = nil,
+                      step: String) async throws(UploadTrouble) -> (Data, HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: delegate)
         } catch let error as URLError {
             throw Task.isCancelled ? .cancelled : UploadTrouble(error)
         } catch is CancellationError {
@@ -347,4 +350,40 @@ final class UschovnaClient {
     private static func milliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private static let pathSegmentAllowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+}
+
+/// Hears a chunk's body go out, on URLSession's own queue, and passes on how much has gone at
+/// most once per `SendThrottle` interval, so the main actor isn't woken for every few kilobytes.
+nonisolated final class SentBytesDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+    private let throttle: SendThrottle
+    private let report: @Sendable (Int64) -> Void
+
+    init(throttle: SendThrottle, report: @escaping @Sendable (Int64) -> Void) {
+        self.throttle = throttle
+        self.report = report
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        if throttle.isDue() { report(totalBytesSent) }
+    }
+}
+
+/// One upload's pace for in-flight progress, shared by all its chunks.
+nonisolated final class SendThrottle: Sendable {
+    private let interval: Duration
+    private let last = Mutex<ContinuousClock.Instant?>(nil)
+
+    init(interval: Duration) {
+        self.interval = interval
+    }
+
+    func isDue() -> Bool {
+        let now = ContinuousClock.now
+        return last.withLock { last in
+            if let previous = last, now - previous < interval { return false }
+            last = now
+            return true
+        }
+    }
 }

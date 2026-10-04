@@ -199,8 +199,25 @@ func expectDelivered(_ files: [UploadFile], _ state: MockState) async throws {
 
 func expectOrderly(_ log: EventLog, total: Int64) throws {
     try expect(log.connecting.first == 0, "the first event isn't .connecting(sent: 0): \(log.events.prefix(3))")
-    try expect(log.progress == log.progress.sorted(), "progress went backwards")
+    try expectSteady(log, total: total)
     try expect(log.progress.last == total, "the last progress is \(log.progress.last ?? -1), not \(total)")
+}
+
+/// `.progress` never passes the total, and never goes back except to the `sent` of a
+/// `.connecting` or `.waitingForNetwork` before it: when a chunk is sent again.
+func expectSteady(_ log: EventLog, total: Int64) throws {
+    var floor: Int64 = 0
+    for (index, event) in log.events.enumerated() {
+        switch event {
+        case .connecting(let sent), .waitingForNetwork(let sent):
+            try expect(sent <= total, "event \(index) is past the total: \(event)")
+            floor = sent
+        case .progress(let sent):
+            try expect(sent >= floor, "progress went back from \(floor) to \(sent) without a resend (event \(index))")
+            try expect(sent <= total, "progress \(sent) is past the total \(total)")
+            floor = sent
+        }
+    }
 }
 
 /// The recipients' link the mock handed out last: `{site}/zasilka/{public}/`.
@@ -527,6 +544,46 @@ scenarios.append(("slow link sizes chunks like the page", {
     // 400 KiB/s is 409600 bytes a second; the page sends five seconds' worth next.
     try expect(sizes.count >= 2 && (1_500_000...2_400_000).contains(sizes[1]), "chunk sizes \(sizes)")
     print("    chunk sizes at 400 KiB/s: \(sizes)")
+}))
+
+scenarios.append(("progress moves within a chunk", {
+    // At 1000 KiB/s the second chunk is about 5 MB and takes about five seconds. The ring should
+    // move during it, not jump at its end.
+    try await Mock.reset(settings: ["slow_kbps": 1000])
+    let total: Int64 = 6_000_000
+    let file = try await makeRandomFile("smooth.bin", bytes: Int(total))
+    let log = EventLog()
+    let started = ContinuousClock.now
+    _ = try await run(service(timing: slowTiming).makeSession(files: [file], sender: "name@example.com"), log).get()
+    let state = try await Mock.state()
+    try await expectDelivered([file], state)
+    try expectOrderly(log, total: total)
+    var ends: [Int64] = [0]
+    for chunk in state.chunks { ends.append(ends.last! + ((chunk["csize"] as? NSNumber)?.int64Value ?? 0)) }
+    try expect(ends.count >= 3, "expected at least two chunks: \(ends)")
+    let second = (ends[1] + 1)..<ends[2]
+    let during = log.progress.filter { second.contains($0) }
+    let timeline = zip(log.events, log.times).map { event, time in
+        "\(String(format: "%.1f", Double((time - started).components.attoseconds) / 1e18 + Double((time - started).components.seconds)))s \(event)"
+    }
+    if ProcessInfo.processInfo.environment["HARNESS_VERBOSE"] != nil { print(timeline.joined(separator: "\n")) }
+    print("    chunk ends \(ends); \(during.count) progress events inside the second chunk")
+    try expect(during.count >= 10, "only \(during.count) progress events during a five-second chunk")
+}))
+
+scenarios.append(("progress goes back only at a resend", {
+    // A chunk dropped halfway on a slow link: in-flight progress is past what Úschovna has, so
+    // the resend has to take it back, and only then.
+    try await Mock.reset(rules: [["kind": "drop", "at": 2], ["kind": "http500", "at": 4]], settings: ["slow_kbps": 1000])
+    let total: Int64 = 3_000_000
+    let file = try await makeRandomFile("resend.bin", bytes: Int(total))
+    let log = EventLog()
+    _ = try await run(service(timing: slowTiming).makeSession(files: [file], sender: "name@example.com"), log).get()
+    let state = try await Mock.state()
+    try await expectDelivered([file], state)
+    try expectOrderly(log, total: total)
+    try expect(log.waiting.count == 1, "expected one .waitingForNetwork for the drop: \(log.waiting)")
+    try expect(log.connecting.count == 3, "expected .connecting at the start, after the drop and before the 500's retry: \(log.connecting)")
 }))
 
 scenarios.append(("still_alive during a long upload", {

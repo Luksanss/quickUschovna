@@ -15,6 +15,19 @@ final class UschovnaSession: UploadSession {
         let size: Int64
     }
 
+    /// The chunk whose body is going out now.
+    private struct ChunkInFlight {
+        let id: Int
+        /// Bytes Úschovna had confirmed when it started, across all the files.
+        let base: Int64
+        let length: Int
+        let started: ContinuousClock.Instant
+        /// Bytes URLSession has handed to the network. The system's socket buffers can take
+        /// megabytes of a chunk at once, and URLSession reports in 1 MiB steps, so this runs ahead
+        /// of what has really left the Mac: it's an upper bound, not the progress.
+        var handedOver: Int64 = 0
+    }
+
     /// A package Úschovna has, and how far into it the upload got.
     private struct Package {
         /// Where the chunks go: the upload host `package_target` named, or the site.
@@ -44,6 +57,12 @@ final class UschovnaSession: UploadSession {
     /// Answers in a row that didn't move the offset forward.
     private var repliesWithoutProgress = 0
     private var lastProgressReport: ContinuousClock.Instant?
+    /// The last event reported. `.progress` never goes below its `sent`: only `.connecting` and
+    /// `.waitingForNetwork` set it back, to what Úschovna has confirmed.
+    private var lastEvent: UploadEvent?
+    private var chunkInFlight: ChunkInFlight?
+    private var chunksSent = 0
+    private let sendThrottle: SendThrottle
     private var onEvent: (@MainActor (UploadEvent) -> Void)?
     private var watch: (any NetworkWatching)?
 
@@ -58,6 +77,7 @@ final class UschovnaSession: UploadSession {
         self.sender = sender
         self.timing = timing
         self.makeNetworkWatch = makeNetworkWatch
+        sendThrottle = SendThrottle(interval: timing.progressInterval)
         if items.count < files.count {
             uschovnaLog.notice("Skipping \(files.count - self.items.count, privacy: .public) empty file(s), as the website does")
         }
@@ -112,10 +132,29 @@ final class UschovnaSession: UploadSession {
             let (reply, sent, elapsed) = try await attempt("ajax_upload") { () async throws(UploadTrouble) in
                 let length = Int(min(Int64(UschovnaWire.chunkSize(afterSpeed: speed)), item.size - current.offset))
                 let body = try await readChunk(of: item, offset: current.offset, length: length)
+                chunksSent += 1
+                let chunk = chunksSent
+                chunkInFlight = ChunkInFlight(id: chunk, base: acknowledged, length: body.count, started: .now)
+                // Progress during the chunk, so the ring and "3 min left" move instead of jumping
+                // once per chunk, about every five seconds: URLSession says what it has handed
+                // over, and a tick reports it, paced by the speed the last chunk was confirmed at.
+                let progress = SentBytesDelegate(throttle: sendThrottle) { [weak self] sent in
+                    Task { @MainActor in self?.chunkSent(sent, chunk: chunk) }
+                }
+                let ticker = Task { [weak self, interval = timing.progressInterval] in
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: interval)
+                        self?.reportChunkInFlight(chunk)
+                    }
+                }
+                defer {
+                    ticker.cancel()
+                    chunkInFlight = nil
+                }
                 do throws(UploadTrouble) {
                     let (reply, elapsed) = try await client.uploadChunk(
                         on: current.host, package: current.code, name: item.name, fileSize: item.size,
-                        offset: current.offset, tmp: current.tmp, body: body)
+                        offset: current.offset, tmp: current.tmp, body: body, progress: progress)
                     return (reply, body.count, elapsed)
                 } catch {
                     // The page sends a failed chunk again as it was, with no timeout. This client
@@ -154,7 +193,7 @@ final class UschovnaSession: UploadSession {
             }
             isResuming = false
             speed = UschovnaWire.speed(bytes: sent, elapsed: elapsed)
-            reportProgress(force: package?.offset == 0)
+            reportProgress(acknowledged, force: package?.offset == 0)
         }
 
         return try await finish()
@@ -222,7 +261,7 @@ final class UschovnaSession: UploadSession {
             if case .refused = error { package = nil }
             throw error
         }
-        reportProgress(force: true)
+        reportProgress(acknowledged, force: true)
         let link = try await shareableLink(finishCode: code)
         uschovnaLog.info("Finished; sharing \(link.absoluteString, privacy: .private)")
         return link
@@ -293,6 +332,8 @@ final class UschovnaSession: UploadSession {
                     guard retry, failures < timing.maxAttempts else { throw error }
                     uschovnaLog.notice("\(detail, privacy: .public); trying again (\(failures, privacy: .public))")
                     try await pause(after: failures)
+                    // A chunk sent again starts over, so progress goes back to what's confirmed.
+                    emit(.connecting(sent: acknowledged))
                 case .network(let urlError):
                     emit(.waitingForNetwork(sent: acknowledged))
                     if isOffline(urlError) {
@@ -385,14 +426,45 @@ final class UschovnaSession: UploadSession {
     }
 
     private func emit(_ event: UploadEvent) {
+        lastEvent = event
         onEvent?(event)
     }
 
-    /// At most one `.progress` per `timing.progressInterval`, except at the end of each file.
-    private func reportProgress(force: Bool) {
+    /// URLSession has handed over `sent` bytes of the chunk in flight. Reports that come in after
+    /// their chunk ended, or for an attempt that has since failed, are dropped.
+    private func chunkSent(_ sent: Int64, chunk: Int) {
+        guard let inFlight = chunkInFlight, inFlight.id == chunk else { return }
+        chunkInFlight?.handedOver = max(inFlight.handedOver, sent)
+    }
+
+    /// The chunk in flight's progress: what URLSession has handed over, but no faster than the
+    /// last chunk was confirmed, since the socket buffers make "handed over" run ahead of the
+    /// network. Before any speed is known (the first chunk, or after a lost connection), only
+    /// what's handed over.
+    private func reportChunkInFlight(_ chunk: Int) {
+        guard let inFlight = chunkInFlight, inFlight.id == chunk else { return }
+        var sent = min(inFlight.handedOver, Int64(inFlight.length))
+        if speed > 0 {
+            let elapsed = (ContinuousClock.now - inFlight.started).components
+            let seconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+            sent = min(sent, Int64(Double(speed) * seconds))
+        }
+        reportProgress(inFlight.base + sent, force: false)
+    }
+
+    /// `.progress`, at most once per `timing.progressInterval` except at the end of each file,
+    /// never past the package's total, and never below the last `sent` reported: it only goes back
+    /// with `.connecting` or `.waitingForNetwork`, when a chunk is sent again.
+    private func reportProgress(_ sent: Int64, force: Bool) {
+        let sent = min(sent, totalBytes)
+        switch lastEvent {
+        case .progress(let previous) where sent <= previous: return
+        case .connecting(let floor), .waitingForNetwork(let floor): if sent < floor { return }
+        case .progress, nil: break
+        }
         let now = ContinuousClock.now
         if !force, let last = lastProgressReport, now - last < timing.progressInterval { return }
         lastProgressReport = now
-        emit(.progress(sent: acknowledged))
+        emit(.progress(sent: sent))
     }
 }
