@@ -1,7 +1,8 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let model = AppModel()
+    /// Shared with the extensions of `AppDelegate` that receive files from outside, like the Quick Action.
+    let model = AppModel()
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
