@@ -2,7 +2,7 @@
 name: handoff-update
 description: "End-of-work handover. Runs the required checks, rewrites the handoff document and any docs the change invalidated so a fresh session can continue, commits what is left on dev, pushes it, and at a release opens the dev → main pull request. Use when work is finished or pausing, or when asked 'are we ready to commit / release'."
 disable-model-invocation: true
-allowed-tools: Read Edit Write Grep Glob Bash(git *) Bash(ls *) Bash(date *) Bash(gh pr *)
+allowed-tools: Read Edit Write Grep Glob Bash(git *) Bash(ls *) Bash(date *) Bash(gh pr *) Bash(xcodebuild *) Bash(scripts/uschovna/run-tests.sh*)
 ---
 
 # /handoff-update — ready to commit?
@@ -22,11 +22,11 @@ Everything above is already loaded; do not re-run it.
    repo doesn't use feature branches.
 
 2. **Run the required checks**, one at a time, and record the real result of each:
-   **none configured yet.** No project exists, so report "no checks configured" in the
-   hand-over. When the Xcode project lands, its clean build (Debug and Release) becomes the
-   required check (plus `test` once tests exist). In that same commit, put the exact
-   `xcodebuild` command here and in `CLAUDE.md`, add `Bash(xcodebuild *)` to `allowed-tools`
-   above, and replace the Checks line of the hand-over template below.
+   1. `xcodebuild -project quickUschovna.xcodeproj -scheme quickUschovna -configuration Debug -derivedDataPath build/DerivedData.noindex build`
+   2. the same with `-configuration Release`
+   3. `scripts/uschovna/run-tests.sh` (the Úschovna client against the local mock; sends nothing)
+   A build passes only with no warnings from our code; the `appintentsmetadataprocessor`
+   "Metadata extraction skipped" lines aren't ours.
    A failure is reported verbatim, not summarised away. Do not fix and re-run silently: say
    what failed, fix it, then say it passes now.
 
@@ -82,7 +82,7 @@ Everything above is already loaded; do not re-run it.
    **Docs changed:** <files, one line>
    **Archived:** <path written, or "no, not a release" / "no, archive for this release already exists">
    **Branch:** `dev` · **Files:** <count> (<list, or "see diff --stat">)
-   **Checks:** none configured yet
+   **Checks:** Debug ✓/✗ · Release ✓/✗ · client scenarios ✓/✗
    — a ✗ gets one line underneath with the error, verbatim.
 
    **Commits** — one line each, oldest first: `<short sha>` `<subject>`. If the work could

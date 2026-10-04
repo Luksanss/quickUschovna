@@ -24,8 +24,19 @@ One developer, one user, so keep it simple.
 - **Archive a handoff only at a release:** copy `docs/handoff.md` to
   `docs/archive/handoffs/<ISO date>.md`, adding a topical suffix if the date is taken. Between
   releases, `/handoff-update` rewrites `docs/handoff.md` in place and writes no archive.
-- **No CI; checks run locally.** There's no required check yet, because there's no project.
-  When the Xcode project lands, its clean build becomes one; put the exact command here.
+- **No CI; checks run locally.** The required checks are a clean build of the quickUschovna scheme,
+  Debug and Release, with no warnings in our code (the `appintentsmetadataprocessor` "Metadata
+  extraction skipped" lines aren't ours), and the Úschovna client's scenarios against the local
+  mock server, which sends nothing to Úschovna. The `.noindex` suffix keeps dev builds out of
+  Spotlight.
+  ```
+  for c in Debug Release; do xcodebuild -project quickUschovna.xcodeproj -scheme quickUschovna -configuration $c -derivedDataPath build/DerivedData.noindex build | grep -E 'error|warning: |BUILD' ; done
+  scripts/uschovna/run-tests.sh
+  ```
+- **Debug builds can be driven without a mouse.** `--simulate [MB/s]` replaces Úschovna with a
+  stand-in that sends nothing and keeps its own settings; `xcrun swift scripts/debug-control.swift
+  <command>` sends it commands (`send`, `drag`, `over`, `panel`, `dump <file>`…, listed in
+  `quickUschovna/App/DebugControl.swift`).
 
 ## Rules that are expensive to forget
 
