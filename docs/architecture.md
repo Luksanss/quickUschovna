@@ -1,0 +1,109 @@
+# quickUschovna: architecture
+
+How v1 is built. What it does is `docs/spec.md`; this file is the map of the code and the reasons
+behind its shape. Written 2026-10-04.
+
+## One model, many views
+
+`AppModel` (`quickUschovna/Model/AppModel.swift`) is an `@Observable` port of the prototype's state
+machine (`class Component` in `design/prototype/quickUschovna v1.dc.html`): the queue, the history,
+the bubble and its timings, the panel's state, the drag. Everything else either reads it or calls
+its methods:
+- **The SwiftUI views** (`quickUschovna/UI/`) read it and call its actions.
+- **The AppKit side** (`quickUschovna/Surfaces/`) follows it with `observe` (`Observe.swift`, a
+  re-arming `withObservationTracking`) to swap the icon's image and show or hide windows.
+- **The upload** goes through the `UploadService` / `UploadSession` contract
+  (`Model/UploadService.swift`), so the model never sees HTTP, and Debug builds can swap in
+  `SimulatedUploadService`.
+
+The app target runs with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so everything is on the main
+actor unless it says otherwise. What must not block it is marked `nonisolated` / `@concurrent`:
+measuring and zipping files, and the client's reads and requests.
+
+## The menu bar and the surfaces
+
+- **`StatusItemController`**: a fixed 32 pt `NSStatusItem` (the prototype's item, so the wider
+  drag-over image doesn't push neighbours). A click toggles the panel; drops on it go through
+  `FileDrop`, which takes the dragging-destination calls the status bar window forwards to its
+  delegate.
+- **`SurfacePresenter`**: three `Surface`s, the drop zone, the bubble and the panel, each a
+  `SurfaceWindow` (a borderless, non-activating, transparent `NSPanel` at `.statusBar` level on all
+  Spaces) with a fresh `SurfaceHostingView` each time it's shown, so the view's entrance plays.
+  The hosting view reports size changes and the window grows downwards, its top pinned 6 pt under
+  the menu bar and its left 8 pt left of the item, clamped 8 pt inside the screen (`SurfaceMetrics`).
+  - **The views draw their own shadow**, so a window is bigger than its surface by
+    `SurfaceMetrics.shadowInsets`. A window takes the mouse only over the surface itself
+    (`SurfaceWindow.updateMouseHandling`, driven by mouse-moved and dragged monitors); otherwise
+    the shadow's faint pixels would catch clicks, even over the menu bar.
+  - **Keyboard:** only the panel and the first-run bubble become key (non-activating, so the front
+    app stays active). Esc goes through a local key monitor to `AppModel.escape()`.
+  - **Clicks elsewhere:** a global mouse-down monitor calls `AppModel.clickedOutside()`.
+- **`DragMonitor`**: opens the drop zone for file drags anywhere. Global mouse monitors need no
+  permission; a changed drag-pasteboard count since mouse-down means a drag started, and only file
+  URLs count. A folder isn't measured until it's dropped (`docs/spec.md` § Ways in, and Findings in
+  `docs/handoff.md`). The zone stays 300 ms after the mouse goes up, because the drop is delivered
+  just after.
+
+## The views
+
+`quickUschovna/UI/` matches the prototype one to one, checked side by side against renders of the
+prototype (`docs/handoff.md`):
+- `SurfaceStyle.swift`: the prototype's light and dark colour tokens and Chrome's line heights.
+- `SurfaceChrome.swift`: `.surfaceChrome(padding:entrance:)`, the 300 pt surface with radius 14,
+  hairlines, a CSS-like shadow outside the surface only, the shadow's room, and the 120 ms
+  entrances. The material is `.hudWindow` with the prototype's background colour over it, the
+  closest of the system materials.
+- `SurfaceControls.swift`: head/tail names (the end with the extension never truncates), the email
+  field, the switch, buttons, separators.
+- `MenuBarGlyphGeometry.swift`: the icon's SVG paths from `design/prototype/MenuBarIcon.dc.html`,
+  one source for `MenuBarIconRenderer` (the status item's 18 pt images, template except the
+  drag-over one) and `MenuBarGlyph` (SwiftUI).
+- `DropZoneView`, `BubbleView`, `PanelView`.
+
+`quickUschovna/Debug/DesignGallery.swift`: `--render-gallery <dir>` (Debug only) renders every
+surface and icon state to PNGs and quits; add `-AppleLocale en_US` for the prototype's formats.
+
+## Sending
+
+- **`AppModel.send`** measures the items (`FileMeasure`, off the main actor), refuses over 30 GB,
+  asks for the sender first if there's none, and queues one `UploadPackage`. The first package in
+  the queue is worked on by one task at a time.
+- **`Zipper`** writes folders into stored (uncompressed) ZIP archives itself, with UTF-8-flagged
+  NFC names, ZIP64 and zlib's CRC32, because neither Apple's `zip` nor `ditto` produces archives
+  that arrive intact everywhere (`docs/handoff.md` § Findings). Archives live in the temporary
+  directory under the package's ID until it's sent or cancelled.
+- **The Úschovna client** (`quickUschovna/Uschovna/`, protocol in `docs/uschovna-protocol.md`):
+  - `UschovnaService` makes one `UschovnaSession` per package, which keeps the package code and
+    offsets so Try Again resumes it.
+  - `UschovnaClient` builds the page's requests: its own ephemeral `URLSession` and cookie, the
+    page's headers, an honest User-Agent.
+  - `UschovnaWire` holds the exact encodings, the chunk-size rule, and JavaScript's loose equality
+    for the server's answers (it answers `true` where the page compares with `1`).
+  - `NetworkWatch` (`NWPathMonitor`) lets a session wait out a lost network and resume from the
+    last acknowledged byte; `FileChunks` reads chunks off the main actor.
+  - Progress includes the chunk in flight, so the ring moves smoothly.
+  - The link is always the public one, `https://www.uschovna.cz/zasilka/<public code>/`. The part
+    of the finish code after its slash is the sender's secret (it can delete the package); it's
+    never returned or logged.
+- **`SettingsStore`** keeps the sender address in `UserDefaults` and the links in
+  `~/Library/Application Support/quickUschovna/history.json`. `LaunchAtLogin` is `SMAppService`.
+- **While anything is queued,** a `ProcessInfo` activity keeps the Mac from idle-sleeping.
+
+## The Quick Action
+
+`QuickAction/` is a headless Action extension (`com.apple.services`) that Finder lists under Quick
+Actions. It resolves the selection to file URLs and opens them with the containing app through
+Launch Services, which launches it if needed, delivers them in one `application(_:open:)`
+(`quickUschovna/App/QuickActionReceiver.swift`), and lets the non-sandboxed app read Desktop,
+Documents and Downloads without a prompt. Details and the manual test: `docs/quick-action.md`.
+
+## Testing without a mouse or Úschovna
+
+- `scripts/uschovna/run-tests.sh`: the client's real sources compiled with the app's settings,
+  against `scripts/uschovna/mock_server.py`, a stdlib Python mock of the protocol with switches for
+  drops, stalls, errors and slow links.
+- `--simulate [MB/s]` (Debug): a stand-in for Úschovna (`SimulatedUploadService`, with
+  `--simulate-failure` and `--simulate-offline`) and separate settings.
+- `scripts/debug-control.swift` (Debug): posts commands to the running app (`DebugControl`):
+  `send`, `drag`, `over`, `panel`, `email`, `dump <file>` and more, so the prototype's scenarios can
+  be played and the windows captured.
