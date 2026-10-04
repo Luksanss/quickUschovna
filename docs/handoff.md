@@ -82,7 +82,7 @@ In this order; each step gates the next.
   Design proposes all three ways in (the icon, a drop zone under it while dragging, Finder's Quick
   Action). A keyboard shortcut was considered and dropped. Clicking the icon opens a panel in the
   bubble's family rather than an `NSMenu`; the maintainer left that to whichever fits the main
-  design, and the agent picked the panel. UI copy is Czech.
+  design, and the agent picked the panel. The UI is in English.
 - **The repository is public from day one** (the maintainer, at setup). Everything committed is
   world-readable: no keys, tokens, certificates, personal addresses or Team IDs in the repo.
   Secrets live only in the GitHub `release` environment, which only `main` can use.

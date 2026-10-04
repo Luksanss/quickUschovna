@@ -14,8 +14,8 @@ the clipboard. Show it on a mock macOS desktop with a menu bar, a Finder window 
 in it, and the app's icon in the menu bar. The app has no window and no Dock icon; everything it
 shows hangs from that icon.
 
-The UI copy is **Czech**, the maintainer's language and Úschovna's. The strings quoted below are
-a starting point; improve them if a shorter one says the same.
+The UI copy is **English**. The strings quoted below are a starting point; improve them if a
+shorter one says the same.
 
 ## Why
 
@@ -36,20 +36,20 @@ These are requirements, not suggestions.
 3. **While it uploads,** the menu-bar icon shows the progress. Clicking the icon shows the
    details (§ The panel).
 4. **When it's done,** the link is copied to the clipboard and **a bubble** slides out under the
-   icon for about 3 seconds: "Odkaz zkopírován", what was sent ("report.mov · 2,4 GB" or
-   "3 soubory · 2,4 GB"), and until when it's valid ("platí do 18. 10."; free packages are kept 14
+   icon for about 3 seconds: "Link copied", what was sent ("report.mov · 2.4 GB" or
+   "3 files · 2.4 GB"), and until when it's valid ("Expires Oct 18"; free packages are kept 14
    days). Hovering keeps it open; clicking it opens the link in the browser.
 5. **A second drop during an upload** is a second package. It queues behind the first and gets
    its own link and its own bubble.
-6. **The first drop ever,** with no sender email set, opens the bubble with one field: "Tvůj
-   e-mail (odesílatel)". Return saves it and the upload starts. That's the whole onboarding. The
+6. **The first drop ever,** with no sender email set, opens the bubble with one field: "Your email
+   (the sender)". Return saves it and the upload starts. That's the whole onboarding. The
    address can be changed later in the panel.
-7. **Too big:** over 30 GB in one drop, the bubble says so straight away ("Zdarma jde poslat
-   nejvýš 30 GB") and nothing uploads.
+7. **Too big:** over 30 GB in one drop, the bubble says so straight away ("Free packages are
+   limited to 30 GB") and nothing uploads.
 8. **The connection drops:** the upload pauses, the icon and panel say it's reconnecting, and it
    resumes where it stopped when the network is back. No restart from zero.
 9. **Úschovna fails** (their site is down or has changed): the bubble says Úschovna isn't
-   answering, with "Zkusit znovu". The files stay queued until then or until cancelled.
+   answering, with "Try Again". The files stay queued until then or until cancelled.
 10. **Cancel** an upload from the panel. Quitting during an upload asks first.
 
 ## What to design
@@ -76,12 +76,12 @@ default experience if only one could be:
 1. **The icon as the drop target.** Drag files onto the menu-bar icon. Always there, but a small
    target, about 22 pt.
 2. **A drop zone under the icon.** As soon as a file drag starts anywhere on the screen, a larger
-   zone slides out under the icon ("Pusť sem"), so you don't have to hit 22 pt. It highlights
+   zone slides out under the icon ("Drop here"), so you don't have to hit 22 pt. It highlights
    when the drag is over it and disappears when the drag ends anywhere else. It must not get in
    the way of drags that have nothing to do with sending: decide how big it is, how far it reaches
    down, and how quietly it appears.
-3. **Finder's right-click menu.** A Quick Action, "Poslat přes Úschovnu", under Quick Actions
-   (Rychlé akce) for the selected files and folders. Design its label and icon there. Choosing it
+3. **Finder's right-click menu.** A Quick Action, "Send with Úschovna", under Quick Actions
+   for the selected files and folders. Design its label and icon there. Choosing it
    gives the same flow as a drop: icon progress, then the bubble.
 
 ### The bubble
@@ -95,14 +95,14 @@ icon, in system materials. Design its versions: link copied, the first-run email
 Clicking the icon opens **a panel hanging from the icon, in the same family as the bubble and the
 drop zone,** so the whole app reads as one surface under the icon that changes state. Keep it as
 compact as a menu; it's not a window. It holds:
-- **uploads in progress:** name (or "3 soubory"), size, a progress bar, the time left, cancel.
+- **uploads in progress:** name (or "3 files"), size, a progress bar, the time left, cancel.
   Queued packages below the running one;
 - **recent links,** for as long as Úschovna keeps them (14 days): name, size, and the days left
-  ("ještě 12 dní", "zítra vyprší"). Clicking one copies its link again, with visible feedback.
+  ("12 days left", "expires tomorrow"). Clicking one copies its link again, with visible feedback.
   Opening it in the browser is a secondary action. Expired links disappear on their own. Empty
   state: one quiet line, not an illustration;
-- **settings, at the bottom:** the sender email (editable in place), "Spouštět po přihlášení",
-  and "Ukončit". Nothing else.
+- **settings, at the bottom:** the sender email (editable in place), "Launch at Login",
+  and "Quit". Nothing else.
 
 If you find a native `NSMenu` would fit the rest of the design better than a panel, show both
 and say why. The maintainer asked for whichever fits the app's main design.
@@ -112,7 +112,8 @@ and say why. The maintainer asked for whichever fits the app's main design.
 - light and dark mode, the system accent colour, system materials and system fonts;
 - animations of at most 150 ms, or none;
 - placement: everything hangs from the icon, on the display whose menu bar was used;
-- Czech number and date formats ("2,4 GB", "18. 10.").
+- numbers, sizes and dates in the system's locale (`ByteCountFormatter`, `DateFormatter`); the
+  mock uses English ones ("2.4 GB", "Oct 18").
 
 ## Scenarios
 
@@ -121,7 +122,7 @@ drags from Finder can't happen in a prototype, so the mock Finder window's files
 chips, and the upload speed is a prototype control.
 
 1. **First run:** no email set; drop one file → the email field → upload → bubble.
-2. **One video:** `report.mov`, 2,4 GB (the default).
+2. **One video:** `report.mov`, 2.4 GB (the default).
 3. **Three photos and a folder** in one drop → zipping, one package, one link.
 4. **A 45 GB file** → too big, nothing uploads.
 5. **The network drops at 60 %** → reconnecting → resumes → done.
@@ -129,7 +130,7 @@ chips, and the upload speed is a prototype control.
 7. **The panel with history:** five links, one expiring tomorrow, plus an upload running.
 8. **A very long file name**, in the bubble and in the panel.
 9. **Finder's Quick Action** on two selected files.
-10. **Úschovna not answering** → error bubble → "Zkusit znovu" works.
+10. **Úschovna not answering** → error bubble → "Try Again" works.
 
 ## Don't add
 
