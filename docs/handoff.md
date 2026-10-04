@@ -55,7 +55,7 @@ In this order; each step gates the next.
    email). As minimal as betterTab.
 4. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
    first required check (Known gaps). The first real send needs the maintainer's go-ahead
-   (Safety); use it to note how many downloads the sender's link allows (Findings).
+   (Safety).
 5. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
    `docs/releasing.md` (a push to `main` builds, signs and publishes a GitHub Release, with
    Sparkle for updates). The maintainer creates the `release` environment (Selected branches:
@@ -117,9 +117,10 @@ terms, `robots.txt`, the endpoint names and the price list were checked twice.
   domain has a mail server. Whether the server checks more is unknown. **Recipients are
   optional:** the JS asks for a sender address only when recipients are given, and the
   maintainer confirmed it from use on 2026-10-04.
-- **Still unknown: how many downloads the sender's link allows.** The free tier gives each
-  recipient's link 30. The price list sells a link to share anywhere as a Premium feature, which
-  suggests the sender's free link is limited too. It doesn't block the brief.
+- **The sender's free link can be shared anywhere, but its downloads are capped** (the
+  maintainer, from use, 2026-10-04). So the price list's "link to share anywhere" Premium
+  feature is really about the unlimited downloads. The cap is presumably the free tier's 30 per
+  link, not counted exactly. The app can mention it but doesn't need to work around it.
 - **The terms don't mention automation at all.** `https://www.uschovna.cz/vseobecne_podminky_uschovna`,
   effective 2014-11-01, operator TISCALI MEDIA, a.s.: nothing on bots, scripts, scraping,
   reverse engineering or third-party clients. Two clauses matter: unregistered users may use
