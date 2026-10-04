@@ -3,8 +3,11 @@
 Written on 2026-10-04 for Claude Design. New project, no base file. The maintainer chose the
 completion bubble, the link history and the three ways to drop files; the panel on click was the
 agent's pick, because the drop zone and the bubble already hang from the icon (§ What to design).
-Once a direction is chosen, the spec should describe what was built and this brief stays as the
-record of what was asked for.
+Claude Design built all three ways in (`design/prototype/quickUschovna.dc.html`) and then a final
+"v1" (`design/prototype/quickUschovna v1.dc.html`): the drop zone, with the icon taking drops too,
+plus Finder's Quick Action, and the panel rather than an `NSMenu`. The maintainer picked v1 and had
+it built one to one on 2026-10-04; `docs/spec.md` describes what was built. This brief is kept as
+the record of what was asked for.
 
 ---
 

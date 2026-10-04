@@ -1,19 +1,17 @@
 # Handoff
 
-Written 2026-10-04, when the handoff system was set up and the repository published. There's no
-prior session to carry forward, so this first version records the brief, the state at setup, the
-conventions agreed then, and the research into whether Úschovna can be used at all. Everything
-below is meant to be rewritten by `/handoff-update` as work lands. Treat the structure as a
-starting point, not a form to fill in.
+Updated 2026-10-04, after v1 was built on `dev`. The maintainer had the UI designed in Claude Design
+(`design/prototype/`), picked its final "v1", and asked for it one to one. It's built, tested
+against a mock of Úschovna and in three real uploads, and pushed. Nothing is released yet: `main`
+is still the initial commit.
 
 **The brief.** A macOS menu-bar app that makes sending a file through
-[uschovna.cz](https://www.uschovna.cz) take seconds instead of a browser round trip. Today it's:
-open Chrome, load Úschovna, type the sender email, add files, click send, wait for the link. The
-target is: drag files onto the menu-bar icon, and the share link is on the clipboard. The sender
-email is set once in the app's settings, so nothing is typed per send. Úschovna is for files too
-big for Discord or email. The goal is minimal, frictionless and fast, in the spirit of the
+[uschovna.cz](https://www.uschovna.cz) take seconds instead of a browser round trip: drag files,
+drop them on the zone under the menu-bar icon (or use Finder's Quick Actions › Send with
+Úschovna), and the share link is on the clipboard. The sender email is set once. Úschovna is for
+files too big for Discord or email. Minimal, frictionless and fast, in the spirit of the
 maintainer's other menu-bar app, betterTab (`../betterTab`), whose conventions this repo follows.
-The UI is designed in Claude Design first; the agent then implements it.
+What v1 does is `docs/spec.md`; how it's built is `docs/architecture.md`.
 
 **Convention.** The current handoff lives at this path and is rewritten in place by every
 `/handoff-update`. It's archived only **at a release**, when `dev` is merged into `main` because
@@ -30,149 +28,140 @@ ticket tracker; the next action below is the backlog.
 
 ## Working copy state
 
-- **`origin` is the public repository
-  [Luksanss/quickUschovna](https://github.com/Luksanss/quickUschovna),** created on 2026-10-04.
-  Anyone can read it.
-- **`main`** has only `00f03d1` (Initial commit, `.gitattributes`), pushed so the repository has
-  its default branch.
-- **`dev`** carries the setup: `.gitignore`, `README.md`, and the handoff system (this file,
-  `docs/archive/handoffs/README.md`, `.claude/skills/handoff*/`, `CLAUDE.md`). Pushed.
-- **No code, no Xcode project, no build.** Nothing runs locally.
+- **`origin`** is the public repository
+  [Luksanss/quickUschovna](https://github.com/Luksanss/quickUschovna).
+- **`main`** has only `00f03d1` (Initial commit). No release has run.
+- **`dev`** has v1 and is pushed: the Xcode project (app + `QuickAction` extension), the model,
+  the surfaces, the UI, the Úschovna client and its mock tests, the Quick Action, the app icon, the
+  release workflow and scripts, and the docs.
+- **The agents' worktrees are gone,** and their builds are unregistered from Launch Services. Four
+  agents built the client, the UI, the Quick Action and the release pipeline in parallel worktrees;
+  their commits were cherry-picked onto `dev`.
+- **On the maintainer's Mac:** a Debug build from `build/DerivedData.noindex` may still be running
+  (started by the agent). Its real settings now hold the maintainer's sender address and one test
+  link in Recent ("quickUschovna test 3.zip", from an approved test; it expires on 2026-10-18). The
+  Quick Action that's registered is the one in `build/DerivedData.noindex`'s Release build.
 
 ## Next action
 
-In this order; each step gates the next.
-
-1. **Design in Claude Design** from `docs/design-brief-v1.md`: the menu-bar icon and its states,
-   the three ways in, the bubble, the panel, ten scenarios. The maintainer runs it and picks a
-   direction; then the brief's header records what was chosen, and a `docs/spec.md` describes
-   the app as it will be built.
-2. **Optionally, ask Úschovna** (info@uschovna.cz) whether a personal client is fine or whether
-   there's an API. The maintainer sends it; an agent may draft it.
-3. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
-   first required check (Known gaps). The first real send needs the maintainer's go-ahead
-   (Safety).
-4. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
-   `docs/releasing.md` (a push to `main` builds, signs and publishes a GitHub Release, with
-   Sparkle for updates). The maintainer creates the `release` environment (Selected branches:
-   `main` only) and sets its secrets; agents never handle keys. What carries over from betterTab:
-   - **The Apple Development certificate is reused,** not regenerated. It's the maintainer's
-     developer identity (Personal Team, expires 2027-09-29), not a per-app key. The same `.p12`
-     goes into this repo's `release` environment as `SIGNING_CERT_P12` and
-     `SIGNING_CERT_PASSWORD`; environment secrets don't cross repositories.
-   - **Sparkle's EdDSA key is new, one per app.** Reusing betterTab's would work, but a leak of one
-     key would then let someone sign updates for both apps, and a second key costs nothing. Trap:
-     `generate_keys` without `--account` finds betterTab's key already in the login keychain and
-     just prints it, so it silently reuses it. Use a separate account name (e.g.
-     `--account quickUschovna`, checked against `generate_keys --help` of the Sparkle version in
-     use) for `generate_keys`, its `-x` export and `sign_update`.
+1. **The maintainer tries it by hand** (what the agent couldn't do without a mouse; see Known gaps):
+   - drag a file from Finder onto the drop zone, and onto the icon; a folder from Downloads (no
+     permission prompt expected);
+   - turn on the Quick Action (Finder › right-click › Quick Actions › Customize… › Send with
+     Úschovna), then send two files and a folder with it;
+   - click just around the panel and on the icon while the panel is open (the shadow must let
+     clicks through); Esc in the panel; hover in the bubble and the Recent rows;
+   - dark mode; Launch at Login once it's installed from a release.
+2. **Before the first merge to `main`:** create the `release` environment and its two secrets
+   (`docs/releasing.md` § Signing with your certificate). Without them the workflow refuses to release, and if the job
+   runs first, GitHub creates the environment without the main-only rule.
+3. **Release 1:** when the maintainer says v1 works, the agent opens the `dev` → `main` pull request;
+   the maintainer merges it with a merge commit, which publishes `v1.0.<commit count>`. Then check
+   the run, install the disk image, and repeat the Quick Action test from the installed app.
 
 ## Decisions already settled
 
-- **The app's output is one link to share** (the maintainer, 2026-10-04): the package link
-  Úschovna gives the sender, put on the clipboard. No recipients and no message, so Úschovna
-  emails nobody but the sender's own control email. Sharing that link is how the maintainer
-  already uses Úschovna, e.g. for files too big for Discord.
-- **A native client of Úschovna's website upload** (the maintainer, 2026-10-04), not the real
-  page driven in a hidden `WKWebView`: faster, smaller, and no worse at surviving their changes.
-  It sits behind a small provider interface, so an official-API backend can replace Úschovna if
-  it breaks or says no (Findings: Fallbacks).
-- **UI decisions for the design brief** (the maintainer, 2026-10-04): a bubble under the icon
-  confirms the copied link; recent links stay listed for as long as Úschovna keeps them; Claude
-  Design proposes all three ways in (the icon, a drop zone under it while dragging, Finder's Quick
-  Action). A keyboard shortcut was considered and dropped. Clicking the icon opens a panel in the
-  bubble's family rather than an `NSMenu`; the maintainer left that to whichever fits the main
-  design, and the agent picked the panel. The UI is in English.
-- **The repository is public from day one** (the maintainer, at setup). Everything committed is
-  world-readable: no keys, tokens, certificates or personal addresses in the repo. (The Team ID
-  in `project.pbxproj` is fine; every signed app carries it in its signature.)
-  Secrets live only in the GitHub `release` environment, which only `main` can use.
-- **Branches: `dev` and `main`, nothing else.** Work is committed straight to `dev`; `main` moves
-  only by merging `dev` when the maintainer says a version works. No feature branches: one
-  developer, one user. Same as betterTab.
-- **No CI, only CD.** Checks run locally before a commit; the only workflow will be the release on
-  push to `main`. The maintainer's call at setup.
-- **The agent may push `dev` and open the `dev` → `main` pull request,** but never merges it and
-  never pushes `main` (CLAUDE.md). betterTab's PRs are merged with a merge commit (`Merge pull
-  request #7 from Luksanss/dev`); keep that, because squashing a long-lived `dev` into `main` makes
-  the two diverge at every release.
-- **The README says only what the research supports:** unofficial, no API, uses the same upload
-  as the website, can break without notice, personal low-volume use. Keep it that way as the
-  app takes shape.
+- **v1 is Claude Design's final design, built one to one** (the maintainer, 2026-10-04): the drop
+  zone under the icon, the icon taking drops too, and Finder's Quick Action; the bubble; the panel
+  (not an `NSMenu`); English UI. Where the app differs from the prototype, `docs/spec.md` says so.
+- **A native client of Úschovna's website upload** (the maintainer), not the real page in a hidden
+  `WKWebView`: faster and smaller. It sits behind `UploadService`, so an official-API backend can
+  replace it if Úschovna breaks or says no (Findings: Fallbacks).
+- **The app's output is one public link to share** (the maintainer): no recipients, no message.
+- **Folders are zipped by our own writer, stored, not compressed** (`Zipper.swift`): media doesn't
+  shrink, and storing runs at disk speed. Apple's `zip` and `ditto` were rejected (Findings).
+- **No in-app updater.** The design has no Check for Updates…, so releases are a disk image on
+  GitHub without Sparkle; users update by hand (`docs/releasing.md`).
+- **Release builds are re-signed without `get-task-allow`**, which Xcode puts in every build
+  (`scripts/build-release.sh`). betterTab had shipped with it; its fix is on betterTab's `dev`.
+- **Formats follow the system's locale**, as the spec says: on a Czech Mac it's "3,1 MB" and
+  "Expires 18. 10." next to English text.
+- **A folder dragged before it's dropped shows its name without a size** (spec § Ways in), to avoid
+  a permission prompt mid-drag.
+- **The repository is public from day one.** Nothing secret in it; release secrets live only in the
+  `release` environment, which only `main` can use. The Team ID in `project.pbxproj` is fine.
+- **Branches: `dev` and `main` only;** no CI, only CD; the agent may push `dev` and open the
+  `dev` → `main` pull request, never merge it or push `main`. betterTab's PRs merge with a merge
+  commit; keep that.
 
 ## Findings worth keeping
 
-From research on 2026-10-04: public pages and the site's JavaScript only, nothing sent. The
-terms, `robots.txt`, the endpoint names and the price list were checked twice.
+**Úschovna, from reading its site (2026-10-04) and three real uploads the maintainer approved:**
+- **There's no API.** The website uploads through its own AJAX protocol, now written up in
+  `docs/uschovna-protocol.md`. No captcha, no email verification, recipients optional.
+- **The server answers `"status": true`** where the page checks `1 == status`. JavaScript's loose
+  equality makes that pass, so the client compares the same way (`UschovnaWire`). The first real
+  attempt stopped right there, before any package existed.
+- **The finish answer's code is `<public>/<secret>`.**
+  - `https://www.uschovna.cz/zasilka/<public>/` is the recipients' page: download, "zbývá 30
+    stažení", no delete. That's the link the app shares, with its trailing slash.
+  - `…/zasilka/<public>/<secret>` is the sender's page with "SMAZAT ZÁSILKU". Never share it or
+    log it.
+  - With the slash encoded as `%2F` the page is a 404.
+- **The recipients' page shows the sender's address** ("<sender> vám posílá zásilku"). The README
+  says so.
+- **Packages went to `www306`/`www307.uschovna.cz`.** Names with Czech diacritics arrived intact,
+  and so did a zipped folder: the page listed it at 996.7 kB, exactly our archive's size.
+- **The terms** (from 2014, TISCALI MEDIA, a.s.) don't mention automation or other clients. They
+  describe uploading "přes webové rozhraní" and allow changing the service without notice. Reading:
+  not forbidden, grey, fine for personal low-volume use, can break any day.
+- **Limits:** free is 30 GB (the script's own limit is 30 GiB; the app uses 30 × 10⁹ bytes, which is
+  stricter), 14 days, 30 downloads per link, 1000 files per package. Premium is 40 Kč per package
+  (unlimited downloads); Úschovna+ is 79 Kč / 3 months.
+- **Fallbacks with an official API,** should it come to that: Smash, Filemail, a self-hosted Send,
+  or Cloudflare R2 presigned links. WeTransfer's API was retired in 2022.
 
-- **Úschovna has no API.** Nothing for developers, businesses or partners on any tier;
-  `https://www.uschovna.cz/api/` answers 403. The website uploads through its own AJAX protocol,
-  in `https://www.uschovna.cz/www/js/uschovna.js` (`?v1.1.85` at the time):
-  1. `POST /ajax/package_target/` with file names and sizes → the upload host. (`/ajax/test_xss`
-     decides whether that host is used cross-origin or the page's own.)
-  2. `POST {host}/ajax/zalozeni_zasilky` with `sender_mail`, `package_recipients[]`, `message`,
-     `premium_checkbox`, `mail_subject`, `language_to` → a package code.
-  3. `POST {host}/ajax/ajax_upload/{timestamp}`: the file as raw chunks of 100 KB to 10 MB
-     (adaptive), described by the headers `X_PACKAGE`, `X_NAME`, `X_SIZE`, `X_USIZE` (offset),
-     `X_CSIZE`, `X_TMP`. The answer `res=1` means continue, `res=2` means the file is done.
-  4. `/ajax/still_alive` during long uploads; then `zalozeni_zasilky` again with
-     `package_code` and `dokoncit: true` to finish the package.
-  5. The browser goes to `/zasilka/{code}`.
-  An older multipart form (`/uploaded/{id}/`, field `f[]`) is still in the page. The only cookie
-  is `PHPSESSID`. There's no captcha: no reCAPTCHA, hCaptcha or Turnstile in the page or the JS.
-- **No email verification in the client.** `/ajax/emailcheck` only checks that the address's
-  domain has a mail server. Whether the server checks more is unknown. **Recipients are
-  optional:** the JS asks for a sender address only when recipients are given, and the
-  maintainer confirmed it from use on 2026-10-04.
-- **The sender's free link can be shared anywhere, but its downloads are capped** (the
-  maintainer, from use, 2026-10-04). So the price list's "link to share anywhere" Premium
-  feature is really about the unlimited downloads. The cap is presumably the free tier's 30 per
-  link, not counted exactly. The app can mention it but doesn't need to work around it.
-- **The terms don't mention automation at all.** `https://www.uschovna.cz/vseobecne_podminky_uschovna`,
-  effective 2014-11-01, operator TISCALI MEDIA, a.s.: nothing on bots, scripts, scraping,
-  reverse engineering or third-party clients. Two clauses matter: unregistered users may use
-  "Nahrávání Zásilek přes webové rozhraní Serveru", i.e. uploading through the web interface; and
-  the operator may change the service at any time without notice. The free tier is paid for by
-  ads (`/ajax/reklama`, video ads during the upload), which a native client doesn't show. Reading:
-  not forbidden, grey (it isn't the web interface and it skips the ads), fine for personal
-  low-volume use, and it can break any day. `robots.txt` only keeps crawlers off `/zasilka/`. The
-  privacy policy lists the sender's address among data used for marketing, and the sender gets a
-  control email for each package.
-- **Limits** (`https://www.uschovna.cz/cenik`): free is 30 GB, kept 14 days, and each recipient
-  gets their own link for 30 downloads; the sender gets a link too. The Premium package (40 Kč
-  online) is 50 GB, 90 days, unlimited downloads, and is the tier advertised as giving a link to
-  share wherever you like. Úschovna+ (79 Kč / 3 months, 259 Kč / year) is packages up to 50 GB
-  for 90 days, 50 GB of permanent storage, no ads, history. No tier includes an API. The JS caps
-  a package at 50 GB.
-- **Prior art, all unofficial:** `tomas-binek/uschovna-bash-api` and
-  `tomas-binek/uschovna-uploader` (2018, the old multipart form, printing `/zasilka/` links as
-  share links, and a folder-watching uploader that is close to this app);
-  `Bendzamen/davinci-resolve-autoupload` (2024, Selenium filling in the form, dismissing the
-  cookie dialog). The flow has been scriptable for years.
-- **Fallbacks with an official API,** if Úschovna says no or breaks: Smash (API and SDKs, paid
-  from €10/month), Filemail (API on paid plans, 20 requests per 10 s), self-hosted Send with the
-  `ffsend` client, Cloudflare R2 presigned URLs (free tier, links valid up to 7 days).
-  WeTransfer's public API was retired on 2022-05-31. Dropshare is an existing paid menu-bar app
-  that does drop-to-link for S3, R2 and others.
+**macOS:**
+- **Apple's `/usr/bin/zip` can't flag names as UTF-8** (no `-UN`), so Czech names arrive garbled on
+  Windows. **`ditto -k --zlibCompressionLevel 0` still deflates,** and over 4 GB it writes archives
+  that `zipinfo` reports as damaged. zlib's `crc32` is hardware-accelerated (~25 GB/s), so our own
+  writer runs at disk speed.
+- **Protected folders.**
+  - Listing a folder in Desktop, Documents or Downloads before the drop would raise the permission
+    prompt mid-drag; a file's size (metadata) doesn't.
+  - Items that arrive by a drop or by Launch Services (the Quick Action) can be read without a
+    prompt, for as long as the app runs.
+- **A third-party Quick Action arrives switched off.** The user ticks it once under Quick Actions ›
+  Customize…; the setting is keyed by the extension's bundle ID, so it survives rebuilds.
+- **Every worktree build registers its own copy of the extension under the same ID,** and PlugInKit
+  may pick a stale one. `lsregister -u` a worktree's builds before deleting it, and check
+  `pluginkit -mAvvv -i com.luksanss.quickUschovna.QuickAction`.
+- **What the agent can and can't do here.** It can capture the screen (`screencapture`), but it
+  can't post mouse or key events (no Accessibility, and it mustn't grant itself any). That's why
+  `DebugControl` exists.
+- **Live tests run on the maintainer's screen while they work.** Their clicks elsewhere dismiss
+  bubbles (`clickedOutside`), which looks like a bug in a scripted run but isn't. Crop captures to
+  the surfaces.
+- **macOS 27's system blue is `#007AFF` in both appearances**; the prototype's dark swatch is
+  `#0A84FF`. The app uses the system accent.
 
 ## Known gaps
 
-- **No required check.** There's no build system yet. When the Xcode project lands, its clean
-  build (Debug and Release) becomes the required check: write the exact `xcodebuild` command into
-  `CLAUDE.md` and `.claude/skills/handoff-update/SKILL.md` in that same commit, and add
-  `Bash(xcodebuild *)` to that skill's `allowed-tools`.
-- **No CD and no `release` environment yet** (Next action 4).
-- **No licence.** betterTab has none either; it's the maintainer's call for a public repo.
+- **Not verified by mouse:**
+  - real drags from Finder onto the zone and the icon (the window-delegate dragging path);
+  - the Quick Action clicked in Finder (verified up to AppKit's own call);
+  - the shadow letting clicks through, and Esc;
+  - Launch at Login from an installed build.
+  All of this is in Next action 1.
+- **The release workflow has never run,** and nothing is notarized, so the first launch needs Open
+  Anyway.
+- **Open protocol questions** (`docs/uschovna-protocol.md`, last section): how the server treats
+  a chunk sent again after a lost answer (above all a file's last chunk), and whether `still_alive`
+  matters.
+- **Rare failures get the generic message.** Over 1000 items in one drop, or nothing but empty
+  files, ends in "Úschovna isn’t answering" rather than a message of its own; the design has none.
+- **Focusing the panel's Sender field selects the whole address,** as macOS does; the prototype
+  leaves the text unselected.
+- **There's no unit-test target.** The model is exercised through `--simulate` and `DebugControl`,
+  the client through its mock.
 
 ## Safety constraints
 
-- **`main` is the release branch.** Once CD exists, every push to `main` publishes a GitHub
-  Release that installs on the maintainer's Mac. Never commit to `main`, never push it, never
-  merge into it on your own judgement.
-- **A real upload is a real send.** It goes out from the maintainer's email address through
-  someone else's service, and triggers a control email. Agents don't trigger real Úschovna
-  uploads, not even with a test file, unless the maintainer asks for that one upload.
-- **Be a polite client.** No bulk sending, no parallel hammering, no load tests against
-  Úschovna. One person's sends, the way the website would make them.
-- **The sender email lives in the app's settings on the Mac, never in the repo.** The repo is
-  public.
+- **`main` is the release branch.** Every push to `main` publishes a GitHub Release. Never commit to
+  `main`, never push it, never merge into it on your own judgement.
+- **A real upload is a real send** from the maintainer's address through someone else's service,
+  and triggers a control email. The maintainer approved up to five small test uploads on
+  2026-10-04; three were used. Ask again before any further real upload.
+- **Be a polite client.** No bulk sending, no parallel hammering, no load tests against Úschovna.
+- **The sender email lives in the app's settings on the Mac, never in the repo.**
+- **Never log, store or share the part of a finish code after its slash.**

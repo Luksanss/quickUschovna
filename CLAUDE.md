@@ -1,15 +1,21 @@
 # quickUschovna
 
-A macOS menu-bar app, not built yet, for sending files through
-[uschovna.cz](https://www.uschovna.cz): drag files onto the menu-bar icon and the share link lands
-on the clipboard, with the sender email set once in settings. It's the maintainer's second
-menu-bar app after betterTab (`../betterTab`), and follows its conventions.
+A macOS menu-bar app for sending files through [uschovna.cz](https://www.uschovna.cz): drag files
+anywhere and drop them on the zone that opens under the menu-bar icon (or use Finder's Quick
+Actions › Send with Úschovna), and the share link lands on the clipboard, with the sender email set
+once. It's the maintainer's second menu-bar app after betterTab (`../betterTab`), and follows its
+conventions.
 
 ## Start here
 
 Read `docs/handoff.md` first. It has the brief, the current state, the next action, the decisions
 already settled and the findings behind them. It's verified against git by `/handoff` and
-rewritten by `/handoff-update`; both skills live in `.claude/skills/`.
+rewritten by `/handoff-update`; both skills live in `.claude/skills/`. Then read:
+- `docs/spec.md`: exactly what the app does. It's the source of truth for behaviour and scope; the
+  design it implements one to one is `design/prototype/quickUschovna v1.dc.html`.
+- `docs/architecture.md`: how it's built.
+- `docs/uschovna-protocol.md`: Úschovna's upload protocol as the client speaks it.
+- `docs/quick-action.md` and `docs/releasing.md`: the Finder Quick Action, and how releases happen.
 
 ## Branches, commits and handoffs
 
