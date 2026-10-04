@@ -84,7 +84,8 @@ In this order; each step gates the next.
   bubble's family rather than an `NSMenu`; the maintainer left that to whichever fits the main
   design, and the agent picked the panel. The UI is in English.
 - **The repository is public from day one** (the maintainer, at setup). Everything committed is
-  world-readable: no keys, tokens, certificates, personal addresses or Team IDs in the repo.
+  world-readable: no keys, tokens, certificates or personal addresses in the repo. (The Team ID
+  in `project.pbxproj` is fine; every signed app carries it in its signature.)
   Secrets live only in the GitHub `release` environment, which only `main` can use.
 - **Branches: `dev` and `main`, nothing else.** Work is committed straight to `dev`; `main` moves
   only by merging `dev` when the maintainer says a version works. No feature branches: one

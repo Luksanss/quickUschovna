@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#ececef;color:#1d1d1f;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#0066cc;text-decoration:none}a:hover{color:#004c99;text-decoration:underline}
+button,input{font-family:inherit}
+@keyframes qsIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes qsFade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div style="box-sizing:border-box;max-width:1680px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:40px">
+<header style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+<h1 style="margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em">quickUschovna</h1>
+<span style="font-size:14px;color:#6e6e73">v1 prototype · drop files on the menu bar, get an Úschovna link on the clipboard</span>
+</header>
+
+<div data-screen-label="Prototype" style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+<aside style="flex:0 0 272px;max-width:100%;display:flex;flex-direction:column;gap:22px;font-size:13px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Scenario</div>
+<div style="display:flex;flex-direction:column;background:#fff;border-radius:12px;padding:4px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<sc-for list="{{ scenarioList }}" as="s" hint-placeholder-count="10">
+<button onClick="{{ s.pick }}" style="display:flex;gap:10px;align-items:baseline;text-align:left;border:none;padding:7px 10px;border-radius:8px;background:{{ s.bg }};color:{{ s.fg }};cursor:pointer">
+<span style="width:16px;flex:none;font-size:12px;font-variant-numeric:tabular-nums;color:{{ s.subFg }}">{{ s.n }}</span>
+<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px;font-weight:500">{{ s.title }}</span><span style="font-size:11.5px;color:{{ s.subFg }}">{{ s.sub }}</span></span>
+</button>
+</sc-for>
+</div>
+<div style="display:flex;gap:8px">
+<button onClick="{{ playToggle }}" style="flex:1;height:32px;border-radius:8px;border:none;background:#1d1d1f;color:#fff;font-size:13px;font-weight:600;cursor:pointer">{{ playLabel }}</button>
+<button onClick="{{ reset }}" style="height:32px;padding:0 14px;border-radius:8px;border:none;background:#fff;color:#1d1d1f;font-size:13px;box-shadow:0 0 0 .5px rgba(0,0,0,.14);cursor:pointer">Reset</button>
+</div>
+<div style="font-size:12px;line-height:17px;color:#6e6e73;text-wrap:pretty">{{ instruction }}</div>
+</div>
+
+<sc-if value="{{ appQuit }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<span style="flex:1">quickUschovna has quit.</span>
+<button onClick="{{ relaunch }}" style="height:26px;padding:0 12px;border-radius:7px;border:none;background:#1d1d1f;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Relaunch</button>
+</div>
+</sc-if>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Way in</div>
+<div style="display:flex;padding:2px;border-radius:9px;background:#e1e1e6">
+<sc-for list="{{ wayOpts }}" as="o" hint-placeholder-count="3">
+<button onClick="{{ o.pick }}" style="flex:1;height:26px;border:none;border-radius:7px;font-size:12px;cursor:pointer;color:#1d1d1f;background:{{ o.bg }};box-shadow:{{ o.shadow }};font-weight:{{ o.fw }}">{{ o.label }}</button>
+</sc-for>
+</div>
+<div style="font-size:12px;color:#6e6e73">Default pick: the drop zone. <a href="#decisions">Why</a></div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Upload speed</div>
+<div style="display:flex;padding:2px;border-radius:9px;background:#e1e1e6">
+<sc-for list="{{ speedOpts }}" as="o" hint-placeholder-count="3">
+<button onClick="{{ o.pick }}" style="flex:1;height:26px;border:none;border-radius:7px;font-size:12px;cursor:pointer;color:#1d1d1f;background:{{ o.bg }};box-shadow:{{ o.shadow }};font-weight:{{ o.fw }}">{{ o.label }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Conditions</div>
+<div style="display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div onClick="{{ toggleNet }}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer">
+<span style="flex:1">Network</span><span style="font-size:12px;color:#6e6e73">{{ netLabel }}</span>
+<span style="position:relative;width:30px;height:18px;border-radius:9px;flex:none;background:{{ netTrack }}"><span style="position:absolute;top:2px;left:{{ netKnob }};width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></span>
+</div>
+<div style="height:1px;background:rgba(0,0,0,.07);margin:0 12px"></div>
+<div onClick="{{ toggleSvc }}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer">
+<span style="flex:1">Úschovna</span><span style="font-size:12px;color:#6e6e73">{{ svcLabel }}</span>
+<span style="position:relative;width:30px;height:18px;border-radius:9px;flex:none;background:{{ svcTrack }}"><span style="position:absolute;top:2px;left:{{ svcKnob }};width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></span>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Appearance</div>
+<div style="display:flex;padding:2px;border-radius:9px;background:#e1e1e6">
+<sc-for list="{{ appearOpts }}" as="o" hint-placeholder-count="2">
+<button onClick="{{ o.pick }}" style="flex:1;height:26px;border:none;border-radius:7px;font-size:12px;cursor:pointer;color:#1d1d1f;background:{{ o.bg }};box-shadow:{{ o.shadow }};font-weight:{{ o.fw }}">{{ o.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px;padding:4px 2px">
+<sc-for list="{{ accentOpts }}" as="a" hint-placeholder-count="7">
+<button onClick="{{ a.pick }}" title="{{ a.id }}" style="width:18px;height:18px;border-radius:50%;border:none;padding:0;cursor:pointer;background:{{ a.color }};box-shadow:{{ a.ring }}"></button>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="display:flex;flex-direction:column;gap:3px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Clipboard</div>
+<div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:16px;word-break:break-all;color:{{ clipFg }}">{{ clipText }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:3px">
+<div style="font-size:12px;font-weight:600;color:#6e6e73">Opened in browser</div>
+<div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:16px;word-break:break-all;color:{{ openedFg }}">{{ openedText }}</div>
+</div>
+</div>
+</aside>
+
+<div ref="{{ stageRef }}" style="flex:1 1 640px;min-width:0">
+<div style="position:relative;height:{{ stageH }}px">
+<div ref="{{ deskRef }}" onMouseDown="{{ onDeskDown }}" style="position:absolute;left:0;top:0;width:1280px;height:800px;transform-origin:0 0;transform:scale({{ scale }});border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.2);user-select:none;-webkit-user-select:none;cursor:default">
+<div ref="{{ themeRef }}" style="position:absolute;inset:0;background:var(--wall, linear-gradient(165deg,#c7d3dc 0%,#a7b9c7 55%,#8ea3b4 100%));color:var(--fg, rgba(0,0,0,.86));font-size:13px">
+
+<div style="position:absolute;left:0;top:0;right:0;height:24px;display:flex;align-items:center;padding:0 8px;background:var(--bar, rgba(255,255,255,.4));backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);color:var(--barfg, #000);z-index:15">
+<div style="display:flex;align-items:center">
+<span style="padding:0 10px;font-weight:700">Finder</span><span style="padding:0 10px">File</span><span style="padding:0 10px">Edit</span><span style="padding:0 10px">View</span><span style="padding:0 10px">Go</span><span style="padding:0 10px">Window</span><span style="padding:0 10px">Help</span>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:6px">
+<sc-if value="{{ appRunning }}" hint-placeholder-val="{{ true }}">
+<div ref="{{ iconRef }}" title="quickUschovna" onMouseDown="{{ stop }}" onClick="{{ toggleIcon }}" onDragEnter="{{ iconDragOver }}" onDragOver="{{ iconDragOver }}" onDragLeave="{{ iconDragLeave }}" onDrop="{{ iconDrop }}" style="height:22px;display:flex;align-items:center;padding:0 7px;border-radius:5px;background:{{ itemBg }}">
+<span style="display:flex;align-items:center;gap:5px;pointer-events:none">
+<dc-import name="MenuBarIcon" state="{{ iconState }}" progress="{{ iconProgress }}" size="{{ 18 }}" hint-size="18px,18px"></dc-import>
+<sc-if value="{{ showPct }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-variant-numeric:tabular-nums;min-width:27px">{{ pctText }}</span></sc-if>
+</span>
+</div>
+</sc-if>
+<span style="display:flex;padding:0 6px"><svg viewBox="0 0 28 14" width="25" height="12.5" style="display:block"><rect x=".75" y=".75" width="23" height="12.5" rx="3.6" style="fill:none;stroke:currentColor;opacity:.45"></rect><rect x="2.6" y="2.6" width="16" height="8.8" rx="2" style="fill:currentColor"></rect><path d="M25.8 5v4" style="stroke:currentColor;opacity:.45;stroke-width:1.5;stroke-linecap:round"></path></svg></span>
+<span style="display:flex;padding:0 6px"><svg viewBox="0 0 18 18" width="17" height="17" style="display:block;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"><path d="M2.6 7.4a9 9 0 0 1 12.8 0"></path><path d="M5.1 10a5.4 5.4 0 0 1 7.8 0"></path><circle cx="9" cy="13.2" r="1.3" style="fill:currentColor;stroke:none"></circle></svg></span>
+<span style="display:flex;padding:0 6px"><svg viewBox="0 0 18 18" width="16" height="16" style="display:block;fill:none;stroke:currentColor;stroke-width:1.4"><rect x="2" y="2.5" width="14" height="5.5" rx="2.75"></rect><circle cx="13.2" cy="5.25" r="1.4" style="fill:currentColor;stroke:none"></circle><rect x="2" y="10" width="14" height="5.5" rx="2.75"></rect><circle cx="4.8" cy="12.75" r="1.4" style="fill:currentColor;stroke:none"></circle></svg></span>
+<span style="padding:0 8px 0 6px;font-variant-numeric:tabular-nums">Sun Oct 4  9:41</span>
+</div>
+</div>
+
+<div style="position:absolute;left:96px;top:96px;width:690px;height:440px;border-radius:12px;overflow:hidden;background:var(--win, #fff);box-shadow:var(--winshadow, 0 22px 60px rgba(0,0,0,.25), 0 0 0 .5px rgba(0,0,0,.18));display:flex">
+<div style="width:170px;flex:none;box-sizing:border-box;background:var(--side, rgba(226,228,233,.9));border-right:.5px solid var(--sep);display:flex;flex-direction:column;gap:1px;padding:12px 10px">
+<div style="display:flex;gap:8px;padding:6px 6px 20px"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840"></span></div>
+<div style="font-size:11px;font-weight:600;color:var(--fg3);padding:2px 8px 4px">Favorites</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px">AirDrop</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px">Recents</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px">Applications</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px">Desktop</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px">Documents</div>
+<div style="height:26px;display:flex;align-items:center;padding:0 8px;border-radius:6px;background:var(--sel)">Downloads</div>
+</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div style="height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 16px;border-bottom:.5px solid var(--sep)">
+<span style="display:flex;gap:14px;color:var(--fg3)"><svg viewBox="0 0 10 16" width="9" height="14" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M8 2L2 8l6 6"></path></svg><svg viewBox="0 0 10 16" width="9" height="14" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M2 2l6 6-6 6"></path></svg></span>
+<span style="font-size:15px;font-weight:700">Downloads</span>
+<span style="flex:1"></span>
+<span style="height:26px;width:150px;border-radius:7px;background:var(--fill);display:flex;align-items:center;padding:0 9px;box-sizing:border-box;color:var(--fg3);font-size:13px">Search</span>
+</div>
+<div onMouseDown="{{ onFinderDown }}" onContextMenu="{{ onFinderCtx }}" style="flex:1;padding:18px;display:grid;grid-template-columns:repeat(auto-fill,108px);grid-auto-rows:min-content;gap:16px 8px;align-content:start;overflow:hidden">
+<sc-for list="{{ files }}" as="f" hint-placeholder-count="3">
+<div data-fid="{{ f.id }}" draggable="true" onDragStart="{{ f.onDragStart }}" onDragEnd="{{ onDragEnd }}" onMouseDown="{{ f.onDown }}" onClick="{{ f.onClick }}" onContextMenu="{{ f.onCtx }}" title="{{ f.name }}" style="display:flex;flex-direction:column;align-items:center;gap:5px">
+<div style="width:76px;height:66px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:{{ f.iconBg }}">
+<sc-if value="{{ f.isFolder }}" hint-placeholder-val="{{ false }}">
+<div style="position:relative;width:60px;height:48px"><div style="position:absolute;left:3px;top:1px;width:24px;height:10px;border-radius:4px 4px 0 0;background:#4A9FE6"></div><div style="position:absolute;left:0;top:7px;width:60px;height:41px;border-radius:5px;background:#69B5F2;box-shadow:inset 0 1px 0 rgba(255,255,255,.45)"></div></div>
+</sc-if>
+<sc-if value="{{ f.isFile }}" hint-placeholder-val="{{ true }}">
+<div style="width:46px;height:58px;box-sizing:border-box;background:#fff;border-radius:4px;box-shadow:0 0 0 .5px rgba(0,0,0,.22),0 1px 3px rgba(0,0,0,.14);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:7px"><span style="font-size:9px;font-weight:700;letter-spacing:.04em;color:{{ f.color }}">{{ f.ext }}</span></div>
+</sc-if>
+</div>
+<div style="max-width:104px;box-sizing:border-box;font-size:12px;line-height:15px;text-align:center;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;background:{{ f.nameBg }};color:{{ f.nameFg }}">{{ f.name }}</div>
+<div style="font-size:11px;color:var(--fg2);margin-top:-3px">{{ f.sizeText }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ showZone }}" hint-placeholder-val="{{ false }}">
+<div onDragEnter="{{ zoneDragOver }}" onDragOver="{{ zoneDragOver }}" onDragLeave="{{ zoneDragLeave }}" onDrop="{{ zoneDrop }}" style="position:absolute;top:30px;left:{{ surfLeft }}px;width:300px;height:{{ zoneH }}px;box-sizing:border-box;padding:6px;border-radius:14px;background:var(--mat, rgba(240,240,243,.82));backdrop-filter:blur(40px) saturate(1.8);-webkit-backdrop-filter:blur(40px) saturate(1.8);box-shadow:var(--shadow, 0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16));z-index:20;animation:qsFade 120ms ease-out">
+<div style="pointer-events:none;height:100%;box-sizing:border-box;border-radius:9px;border:1.5px dashed {{ zoneBorder }};background:{{ zoneBg }};color:{{ zoneFg }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+<dc-import name="MenuBarIcon" state="{{ zoneGlyph }}" size="{{ 22 }}" hint-size="22px,22px"></dc-import>
+<span style="font-size:13px;font-weight:600">{{ zoneText }}</span>
+<span style="font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:{{ zoneSubFg }}">{{ zoneSub }}</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasBubble }}" hint-placeholder-val="{{ false }}">
+<div onMouseDown="{{ stop }}" onMouseEnter="{{ bubbleEnter }}" onMouseLeave="{{ bubbleLeave }}" onClick="{{ bubbleClick }}" style="position:absolute;top:30px;left:{{ surfLeft }}px;width:300px;box-sizing:border-box;padding:12px 14px;border-radius:14px;background:var(--mat, rgba(240,240,243,.82));backdrop-filter:blur(40px) saturate(1.8);-webkit-backdrop-filter:blur(40px) saturate(1.8);box-shadow:var(--shadow, 0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16));z-index:21;animation:qsIn 120ms ease-out">
+
+<sc-if value="{{ bIsCopied }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px;align-items:flex-start">
+<div style="width:28px;height:28px;border-radius:50%;flex:none;background:var(--acc, #007AFF);color:#fff;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 8.4l3 3 6-6.6"></path></svg></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<div style="font-size:13px;font-weight:600">Link copied</div>
+<div style="display:flex;min-width:0;font-size:12px;color:var(--fg2)"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ bHead }}</span><span style="flex:none;white-space:pre">{{ bTail }} · {{ bSize }}</span></div>
+<div style="font-size:12px;color:var(--fg2)">Expires {{ bExpires }}</div>
+</div>
+<sc-if value="{{ bHover }}" hint-placeholder-val="{{ false }}"><span title="Open in browser" style="display:flex;padding-top:2px;color:var(--fg2)"><svg viewBox="0 0 14 14" width="12" height="12" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 2.5h7v7M11.5 2.5l-9 9"></path></svg></span></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ bIsEmail }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px;align-items:flex-start">
+<div style="width:28px;height:28px;border-radius:50%;flex:none;background:var(--fill);color:var(--fg);display:flex;align-items:center;justify-content:center"><dc-import name="MenuBarIcon" state="idle" size="{{ 16 }}" hint-size="16px,16px"></dc-import></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+<div style="font-size:13px;font-weight:600">Your email (the sender)</div>
+<input ref="{{ focusRef }}" type="email" value="{{ emailDraft }}" onChange="{{ onEmailDraft }}" onKeyDown="{{ onBubbleEmailKey }}" placeholder="name@example.com" spellCheck="false" style="height:26px;box-sizing:border-box;border:none;outline:none;border-radius:7px;padding:0 8px;font-size:13px;background:var(--field);color:var(--fg);box-shadow:0 0 0 .5px var(--fg3),0 0 0 3px color-mix(in srgb,var(--acc) 40%,transparent)">
+<div style="font-size:11px;line-height:15px;color:{{ emailHintFg }}">{{ emailHint }}</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ bIsBig }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px;align-items:flex-start">
+<div style="width:28px;height:28px;border-radius:50%;flex:none;background:#FF9500;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round"><path d="M8 3.6v5.2"></path><circle cx="8" cy="12.1" r="1.1" style="fill:#fff;stroke:none"></circle></svg></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<div style="font-size:13px;font-weight:600">{{ bSize }} is too big</div>
+<div style="font-size:12px;color:var(--fg2)">Free packages are limited to 30 GB.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ bIsError }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:11px;align-items:flex-start">
+<div style="width:28px;height:28px;border-radius:50%;flex:none;background:#FF3B30;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round"><path d="M8 3.6v5.2"></path><circle cx="8" cy="12.1" r="1.1" style="fill:#fff;stroke:none"></circle></svg></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<div style="font-size:13px;font-weight:600">Úschovna isn’t answering</div>
+<div style="display:flex;min-width:0;font-size:12px;color:var(--fg2)"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ bHead }}</span><span style="flex:none;white-space:pre">{{ bTail }} is waiting to be sent.</span></div>
+<div style="display:flex;gap:8px;margin-top:8px"><button onClick="{{ retry }}" style="height:24px;padding:0 12px;border:none;border-radius:6px;background:var(--acc, #007AFF);color:#fff;font-size:12px;font-weight:600">Try Again</button></div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+<div onMouseDown="{{ stop }}" style="position:absolute;top:30px;left:{{ surfLeft }}px;width:300px;box-sizing:border-box;padding:6px;border-radius:14px;background:var(--mat, rgba(240,240,243,.82));backdrop-filter:blur(40px) saturate(1.8);-webkit-backdrop-filter:blur(40px) saturate(1.8);box-shadow:var(--shadow, 0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16));z-index:22;animation:qsIn 120ms ease-out;display:flex;flex-direction:column">
+
+<sc-if value="{{ hasQueue }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column">
+<div style="font-size:11px;font-weight:600;color:var(--fg2);padding:6px 10px 2px">Sending</div>
+<sc-for list="{{ uploads }}" as="u" hint-placeholder-count="1">
+<div style="padding:6px 10px 7px;display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;align-items:center;gap:8px">
+<div title="{{ u.full }}" style="flex:1;min-width:0;display:flex;font-size:13px;font-weight:500"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.head }}</span><span style="flex:none;white-space:pre">{{ u.tail }}</span></div>
+<button onClick="{{ u.cancel }}" title="Cancel" style="width:18px;height:18px;flex:none;border-radius:50%;border:none;padding:0;background:var(--fill);color:var(--fg2);display:flex;align-items:center;justify-content:center" style-hover="background:var(--fg3);color:var(--fg)"><svg viewBox="0 0 10 10" width="8" height="8" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"><path d="M2 2l6 6M8 2L2 8"></path></svg></button>
+</div>
+<sc-if value="{{ u.showBar }}" hint-placeholder-val="{{ true }}">
+<div style="height:4px;border-radius:2px;background:var(--fill);overflow:hidden"><div style="height:100%;border-radius:2px;width:{{ u.pct }};background:{{ u.barColor }}"></div></div>
+</sc-if>
+<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:{{ u.statusColor }}">
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.status }}</span>
+<sc-if value="{{ u.isError }}" hint-placeholder-val="{{ false }}"><button onClick="{{ u.retry }}" style="border:none;background:none;padding:0;color:var(--acc);font-size:11px;font-weight:600">Try Again</button></sc-if>
+</div>
+</div>
+</sc-for>
+<div style="height:1px;background:var(--sep);margin:4px 10px"></div>
+</div>
+</sc-if>
+
+<div style="font-size:11px;font-weight:600;color:var(--fg2);padding:6px 10px 2px">Recent</div>
+<sc-if value="{{ hasHistory }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;max-height:236px;overflow:auto">
+<sc-for list="{{ hist }}" as="h" hint-placeholder-count="2">
+<div onClick="{{ h.copy }}" title="Copy the link again" style="display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:7px" style-hover="background:var(--hover)">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+<div title="{{ h.full }}" style="display:flex;min-width:0;font-size:13px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.head }}</span><span style="flex:none;white-space:pre">{{ h.tail }}</span></div>
+<div style="font-size:11px;color:{{ h.metaColor }}">{{ h.meta }}</div>
+</div>
+<button onClick="{{ h.open }}" title="Open in browser" style="width:24px;height:24px;flex:none;border:none;border-radius:6px;padding:0;background:transparent;color:var(--fg3);display:flex;align-items:center;justify-content:center" style-hover="background:var(--fill);color:var(--fg)"><svg viewBox="0 0 14 14" width="11" height="11" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 2.5h7v7M11.5 2.5l-9 9"></path></svg></button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ noHistory }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:12px;color:var(--fg2);padding:3px 10px 8px">Links you send stay here for 14 days.</div>
+</sc-if>
+
+<div style="height:1px;background:var(--sep);margin:4px 10px"></div>
+<div style="display:flex;align-items:center;gap:8px;min-height:30px;padding:0 6px 0 10px">
+<span style="font-size:13px">Sender</span>
+<span style="flex:1"></span>
+<sc-if value="{{ editingEmail }}" hint-placeholder-val="{{ false }}">
+<input ref="{{ focusRef }}" type="email" value="{{ emailDraft }}" onChange="{{ onEmailDraft }}" onKeyDown="{{ onPanelEmailKey }}" onBlur="{{ commitPanelEmail }}" spellCheck="false" style="width:186px;height:22px;box-sizing:border-box;border:none;outline:none;border-radius:5px;padding:0 6px;font-size:13px;text-align:right;background:var(--field);color:var(--fg);box-shadow:0 0 0 .5px var(--fg3),0 0 0 3px color-mix(in srgb,var(--acc) 40%,transparent)">
+</sc-if>
+<sc-if value="{{ notEditingEmail }}" hint-placeholder-val="{{ true }}">
+<button onClick="{{ startEditEmail }}" title="Change the sender email" style="max-width:190px;border:none;background:transparent;padding:3px 5px;border-radius:5px;font-size:13px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" style-hover="background:var(--hover);color:var(--fg)">{{ emailShown }}</button>
+</sc-if>
+</div>
+<sc-if value="{{ panelEmailError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--red);padding:0 10px 4px;text-align:right">{{ emailError }}</div></sc-if>
+<div onClick="{{ toggleLaunch }}" style="display:flex;align-items:center;gap:8px;min-height:30px;padding:0 10px;border-radius:7px" style-hover="background:var(--hover)">
+<span style="flex:1;font-size:13px">Launch at Login</span>
+<span style="position:relative;width:26px;height:15px;border-radius:8px;flex:none;background:{{ launchTrack }}"><span style="position:absolute;top:1.5px;left:{{ launchKnob }};width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 .5px 1.5px rgba(0,0,0,.3)"></span></span>
+</div>
+<div style="height:1px;background:var(--sep);margin:4px 10px"></div>
+<sc-if value="{{ notConfirmQuit }}" hint-placeholder-val="{{ true }}">
+<div onClick="{{ quitClick }}" style="display:flex;align-items:center;min-height:28px;padding:0 10px;border-radius:7px;font-size:13px" style-hover="background:var(--hover)">Quit quickUschovna</div>
+</sc-if>
+<sc-if value="{{ confirmQuit }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;padding:6px 10px 6px">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;font-weight:600">Quit while sending?</span><span style="font-size:12px;color:var(--fg2)">{{ quitDetail }}</span></div>
+<div style="display:flex;justify-content:flex-end;gap:8px">
+<button onClick="{{ cancelQuit }}" style="height:24px;padding:0 12px;border:none;border-radius:6px;background:var(--fill);color:var(--fg);font-size:12px">Cancel</button>
+<button onClick="{{ doQuit }}" style="height:24px;padding:0 12px;border:none;border-radius:6px;background:var(--acc, #007AFF);color:#fff;font-size:12px;font-weight:600">Quit</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasCtx }}" hint-placeholder-val="{{ false }}">
+<div onMouseDown="{{ stop }}" style="position:absolute;left:{{ ctxX }}px;top:{{ ctxY }}px;width:230px;box-sizing:border-box;padding:5px;border-radius:9px;background:var(--mat, rgba(240,240,243,.82));backdrop-filter:blur(40px) saturate(1.8);-webkit-backdrop-filter:blur(40px) saturate(1.8);box-shadow:var(--shadow, 0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16));color:var(--fg);font-size:13px;z-index:30;animation:qsFade 80ms ease-out">
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Open</div>
+<div onMouseEnter="{{ ctxSubClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff"><span style="flex:1">Open With</span><svg viewBox="0 0 8 12" width="6" height="10" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2 1.5L6 6l-4 4.5"></path></svg></div>
+<div style="height:1px;margin:5px 10px;background:var(--sep)"></div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Move to Trash</div>
+<div style="height:1px;margin:5px 10px;background:var(--sep)"></div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Get Info</div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Rename</div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ compressLabel }}</span></div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Duplicate</div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Quick Look</div>
+<div style="height:1px;margin:5px 10px;background:var(--sep)"></div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Copy</div>
+<div onMouseEnter="{{ ctxSubClose }}" onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Share…</div>
+<div style="height:1px;margin:5px 10px;background:var(--sep)"></div>
+<div onMouseEnter="{{ ctxSubOpen }}" style="position:relative;height:22px;display:flex;align-items:center;padding:0 10px;border-radius:5px;background:{{ qaBg }};color:{{ qaFg }}">
+<span style="flex:1">Quick Actions</span><svg viewBox="0 0 8 12" width="6" height="10" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M2 1.5L6 6l-4 4.5"></path></svg>
+<sc-if value="{{ ctxSub }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:-5px;left:{{ subOff }}px;width:220px;box-sizing:border-box;padding:5px;border-radius:9px;background:var(--mat, rgba(240,240,243,.82));backdrop-filter:blur(40px) saturate(1.8);-webkit-backdrop-filter:blur(40px) saturate(1.8);box-shadow:var(--shadow, 0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16));color:var(--fg)">
+<sc-if value="{{ showSendQA }}" hint-placeholder-val="{{ true }}">
+<div onMouseEnter="{{ sendEnter }}" onMouseLeave="{{ sendLeave }}" onClick="{{ ctxSend }}" style="height:22px;display:flex;align-items:center;gap:7px;padding:0 10px 0 8px;border-radius:5px;background:{{ sendBg }};color:{{ sendFg }}"><dc-import name="MenuBarIcon" state="idle" size="{{ 15 }}" hint-size="15px,15px"></dc-import><span>Send with Úschovna</span></div>
+</sc-if>
+<div onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px 0 30px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Create PDF</div>
+<div style="height:1px;margin:5px 10px;background:var(--sep)"></div>
+<div onClick="{{ ctxClose }}" style="height:22px;display:flex;align-items:center;padding:0 10px 0 30px;border-radius:5px" style-hover="background:var(--acc);color:#fff">Customize…</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasGhost }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:{{ gx }}px;top:{{ gy }}px;transition:left 800ms cubic-bezier(.45,0,.25,1),top 800ms cubic-bezier(.45,0,.25,1);pointer-events:none;z-index:60">
+<sc-if value="{{ ghostHasFile }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:-16px;top:-20px;opacity:.88">
+<div style="width:32px;height:40px;box-sizing:border-box;background:#fff;border-radius:3px;box-shadow:0 0 0 .5px rgba(0,0,0,.25),0 3px 8px rgba(0,0,0,.2);display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px"><span style="font-size:7px;font-weight:700;color:{{ ghostColor }}">{{ ghostExt }}</span></div>
+<sc-if value="{{ ghostBadge }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:-10px;top:-7px;min-width:18px;height:18px;box-sizing:border-box;padding:0 5px;border-radius:9px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ ghostCount }}</div></sc-if>
+</div>
+</sc-if>
+<svg viewBox="0 0 16 22" width="16" height="22" style="display:block;position:relative;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))"><path d="M1 1v17l4.3-4.1 2.8 6.4 2.6-1.1-2.8-6.3H14z" style="fill:#000;stroke:#fff;stroke-width:1.2;stroke-linejoin:round"></path></svg>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<section data-screen-label="Icon states" style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;flex-direction:column;gap:4px">
+<h2 style="margin:0;font-size:17px;font-weight:700">Menu-bar icon</h2>
+<p style="margin:0;font-size:13px;line-height:19px;color:#6e6e73;max-width:720px;text-wrap:pretty">A monochrome template image drawn at 18 pt in a 24 pt menu bar. The motif is a parcel with an up arrow: you’re sending a package, not syncing a folder. It isn’t based on Úschovna’s mark.</p>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px">
+<sc-for list="{{ iconSheet }}" as="ic" hint-placeholder-count="8">
+<div style="background:#fff;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="height:88px;border-radius:8px;background:#f4f4f6;color:#1d1d1f;display:flex;align-items:center;justify-content:center"><dc-import name="MenuBarIcon" state="{{ ic.state }}" progress="{{ ic.p }}" size="{{ 54 }}" hint-size="54px,54px"></dc-import></div>
+<div style="display:flex;border-radius:6px;overflow:hidden">
+<div style="flex:1;height:24px;background:#dde3e9;color:#000;display:flex;align-items:center;justify-content:center;gap:5px"><dc-import name="MenuBarIcon" state="{{ ic.state }}" progress="{{ ic.p }}" size="{{ 18 }}" hint-size="18px,18px"></dc-import><sc-if value="{{ ic.hasPct }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-variant-numeric:tabular-nums">{{ ic.pct }}</span></sc-if></div>
+<div style="flex:1;height:24px;background:#22282f;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px"><dc-import name="MenuBarIcon" state="{{ ic.state }}" progress="{{ ic.p }}" size="{{ 18 }}" hint-size="18px,18px"></dc-import><sc-if value="{{ ic.hasPct }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-variant-numeric:tabular-nums">{{ ic.pct }}</span></sc-if></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="font-size:13px;font-weight:600">{{ ic.title }}</div>
+<div style="font-size:12px;line-height:16px;color:#6e6e73;text-wrap:pretty">{{ ic.note }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section id="decisions" data-screen-label="Decisions" style="display:flex;flex-direction:column;gap:14px;padding-bottom:24px">
+<h2 style="margin:0;font-size:17px;font-weight:700">Decisions</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+<div style="background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="font-size:14px;font-weight:600">If only one way in ships: the drop zone</div>
+<div style="font-size:13px;line-height:19px;color:#424245;text-wrap:pretty">The icon still takes drops, so the drop zone does everything the first option does and adds a 300 × 88 pt target. It opens only for file drags, fades in over 120 ms without sliding, and reaches 118 pt down into the top-right corner. The cost: while a drag is in flight it covers the first desktop icon or two. The Quick Action is still worth keeping because it adds nothing to the menu bar.</div>
+</div>
+<div style="background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="font-size:14px;font-weight:600">No percentage next to the icon</div>
+<div style="font-size:13px;line-height:19px;color:#424245;text-wrap:pretty">The ring shows progress at a glance. A percentage adds about 28 pt, pushes every item to its left each time an upload starts or ends, and is the first thing the notch hides. Exact numbers and time left are in the panel. You can turn it on in Tweaks to compare.</div>
+</div>
+<div style="background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="font-size:14px;font-weight:600">A panel, not an NSMenu</div>
+<div style="font-size:13px;line-height:19px;color:#424245;text-wrap:pretty">The rows need a live progress bar, an email field you edit in place, and a “Link copied” confirmation that stays visible. An NSMenu closes on click, so the confirmation would close with it. The panel uses the same 300 pt width, material and anchor as the bubble and the drop zone, so they read as one surface under the icon.</div>
+</div>
+<div style="background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="font-size:14px;font-weight:600">One surface at a time</div>
+<div style="font-size:13px;line-height:19px;color:#424245;text-wrap:pretty">A new bubble replaces the old one. While the panel is open, a finished upload is confirmed in Recent instead of a bubble, and an error shows on its row. Opening the panel closes the bubble and clears the error badge.</div>
+</div>
+<div style="background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(0,0,0,.08)">
+<div style="font-size:14px;font-weight:600">The Quick Action is “Send with Úschovna”</div>
+<div style="font-size:13px;line-height:19px;color:#424245;text-wrap:pretty">It uses the same parcel glyph as the icon, shown as a template image. The label names the service rather than the app, because that’s what people think they’re using. It starts the same flow as a drop: progress on the icon, then the bubble.</div>
+</div>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showPercent&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Menu-bar icon&quot;},&quot;zoneSize&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compact&quot;,&quot;large&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Drop zone&quot;}}">
+const DAY = 86400000;
+const TODAY = new Date(2026, 9, 4);
+const LIMIT = 30e9;
+const SPEEDS = { slow: 60e6, normal: 300e6, fast: 800e6 };
+const ZIP_SPEED = 1.5e9;
+const DEFAULT_EMAIL = 'jana.novak@email.cz';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ACCENTS = [
+  { id: 'blue', l: '#007AFF', d: '#0A84FF' }, { id: 'purple', l: '#953D96', d: '#A550A7' },
+  { id: 'pink', l: '#E8467C', d: '#F05A8E' }, { id: 'red', l: '#E0383E', d: '#FF453A' },
+  { id: 'orange', l: '#F28A14', d: '#FF9F0A' }, { id: 'green', l: '#45A63A', d: '#32D74B' },
+  { id: 'graphite', l: '#8C8C8C', d: '#98989D' },
+];
+const THEMES = {
+  light: { '--fg': 'rgba(0,0,0,.86)', '--fg2': 'rgba(0,0,0,.56)', '--fg3': 'rgba(0,0,0,.3)', '--sep': 'rgba(0,0,0,.1)', '--mat': 'rgba(240,240,243,.8)', '--shadow': '0 12px 32px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.16)', '--win': '#ffffff', '--side': 'rgba(226,228,233,.88)', '--bar': 'rgba(255,255,255,.4)', '--barfg': '#000', '--barsel': 'rgba(0,0,0,.12)', '--hover': 'rgba(0,0,0,.06)', '--fill': 'rgba(0,0,0,.09)', '--sel': 'rgba(0,0,0,.08)', '--field': '#fff', '--red': '#D92D20', '--orange': '#B86200', '--wall': 'linear-gradient(165deg,#c7d3dc 0%,#a7b9c7 55%,#8ea3b4 100%)', '--winshadow': '0 22px 60px rgba(0,0,0,.25), 0 0 0 .5px rgba(0,0,0,.18)' },
+  dark: { '--fg': 'rgba(255,255,255,.88)', '--fg2': 'rgba(255,255,255,.58)', '--fg3': 'rgba(255,255,255,.3)', '--sep': 'rgba(255,255,255,.1)', '--mat': 'rgba(40,40,44,.76)', '--shadow': '0 12px 32px rgba(0,0,0,.5), 0 0 0 .5px rgba(0,0,0,.7), inset 0 0 0 .5px rgba(255,255,255,.14)', '--win': '#1f1f22', '--side': 'rgba(38,38,42,.9)', '--bar': 'rgba(0,0,0,.3)', '--barfg': '#fff', '--barsel': 'rgba(255,255,255,.2)', '--hover': 'rgba(255,255,255,.08)', '--fill': 'rgba(255,255,255,.14)', '--sel': 'rgba(255,255,255,.1)', '--field': 'rgba(0,0,0,.28)', '--red': '#FF6B5E', '--orange': '#FFB340', '--wall': 'linear-gradient(165deg,#2c3541 0%,#1d242d 60%,#141a21 100%)', '--winshadow': '0 22px 60px rgba(0,0,0,.6), 0 0 0 .5px rgba(0,0,0,.8)' },
+};
+const KIND = { video: '#7B5CD6', image: '#2E9E5B', doc: '#D9473F', archive: '#7D7D84', audio: '#E0662E', folder: '#4A9FE6' };
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function fmtBytes(b) {
+  if (b < 1e3) return Math.round(b) + ' bytes';
+  const u = [['KB', 1e3, 0], ['MB', 1e6, 1], ['GB', 1e9, 2], ['TB', 1e12, 2]];
+  let k = u[0]; for (const x of u) if (b >= x[1]) k = x;
+  let s = (b / k[1]).toFixed(k[2]); if (s.includes('.')) s = s.replace(/\.?0+$/, '');
+  return s + ' ' + k[0];
+}
+function fmtLeft(sec) {
+  if (sec < 5) return 'a few seconds left';
+  if (sec < 60) return Math.ceil(sec / 5) * 5 + ' sec left';
+  if (sec < 3600) return Math.round(sec / 60) + ' min left';
+  return Math.floor(sec / 3600) + ' hr ' + Math.round((sec % 3600) / 60) + ' min left';
+}
+const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function split(name) {
+  if (!name || name.length <= 18) return [name || '', ''];
+  const dot = name.lastIndexOf('.');
+  const n = Math.max(8, dot > 0 ? name.length - dot + 5 : 8);
+  return [name.slice(0, -n), name.slice(-n)];
+}
+const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const rand = n => Array.from({ length: n }, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join('');
+const mkLink = () => `https://www.uschovna.cz/zasilka/${rand(16)}-${rand(3)}/`;
+const labelOf = items => items.length === 1 ? (items[0].kind === 'folder' ? items[0].name + '.zip' : items[0].name) : items.length + ' files';
+let PID = 0;
+function mkPkg(items, extra) {
+  const folders = items.filter(f => f.kind === 'folder');
+  return {
+    id: 'p' + (++PID), label: labelOf(items), bytes: items.reduce((a, f) => a + f.bytes, 0), sent: 0, status: 'queued', t: 0,
+    zipTotal: folders.reduce((a, f) => a + f.bytes, 0), zipDone: 0, zipName: folders.length === 1 ? folders[0].name : folders.length + ' folders',
+    ...(extra || {}),
+  };
+}
+const H = (label, bytes, days) => ({ id: 'h' + rand(6), label, bytes, link: mkLink(), expires: new Date(TODAY.getTime() + days * DAY) });
+const HIST2 = () => [H('mix-master-v3.wav', 212e6, 13), H('drone-flight-02.mp4', 1.7e9, 6)];
+const HIST5 = () => [H('mix-master-v3.wav', 212e6, 13), H('3 files', 640e6, 10), H('drone-flight-02.mp4', 1.7e9, 6), H('Holiday 2026.zip', 4.2e9, 3), H('site-plans.pdf', 48e6, 1)];
+
+const F = (id, name, bytes, kind, ext) => ({ id, name, bytes, kind, ext });
+const REP = F('rep', 'report.mov', 2.4e9, 'video', 'MOV');
+const INV = F('inv', 'invoice-september.pdf', 212e3, 'doc', 'PDF');
+const SHOT = F('shot', 'Screenshot 2026-10-03 at 14.12.png', 1.8e6, 'image', 'PNG');
+const SC = [
+  { id: 'first', title: 'First run', sub: 'No sender email yet', files: [REP, INV, SHOT], send: ['rep'], email: '', hist: 'none' },
+  { id: 'video', title: 'One video', sub: 'report.mov · 2.4 GB', files: [REP, INV, SHOT], send: ['rep'] },
+  { id: 'mixed', title: 'Photos and a folder', sub: 'Four items, one package', files: [F('i1', 'IMG_2041.heic', 3.1e6, 'image', 'HEIC'), F('i2', 'IMG_2042.heic', 2.8e6, 'image', 'HEIC'), F('i3', 'IMG_2043.heic', 3.4e6, 'image', 'HEIC'), F('raw', 'Raw footage', 2.1e9, 'folder', ''), INV], send: ['i1', 'i2', 'i3', 'raw'] },
+  { id: 'big', title: 'Too big', sub: 'A 45 GB file', files: [F('wed', 'wedding-4k-master.mov', 45e9, 'video', 'MOV'), INV, SHOT], send: ['wed'] },
+  { id: 'net', title: 'Network drops', sub: 'At 60 %, then resumes', files: [REP, INV, SHOT], send: ['rep'] },
+  { id: 'second', title: 'Second drop', sub: 'Queued behind the first', files: [REP, F('broll', 'b-roll.mov', 1.2e9, 'video', 'MOV'), INV], send: ['rep'] },
+  { id: 'history', title: 'Panel with history', sub: 'Five links, one upload running', files: [REP, INV, SHOT], send: [], hist: 'five', running: true },
+  { id: 'long', title: 'Very long name', sub: 'In the bubble and the panel', files: [F('long', 'Final_Final_v7_Prezentace_pro_klienta_Q4_2026_schvalena_verze_OPRAVDU_posledni.mov', 3.2e9, 'video', 'MOV'), INV], send: ['long'] },
+  { id: 'quick', title: 'Finder Quick Action', sub: 'Two selected files', files: [F('con', 'contract-signed.pdf', 4.2e6, 'doc', 'PDF'), F('site', 'site-photos.zip', 860e6, 'archive', 'ZIP'), SHOT], send: ['con', 'site'], quick: true },
+  { id: 'down', title: 'Úschovna not answering', sub: 'Error, then Try Again', files: [REP, INV, SHOT], send: ['rep'], down: true },
+];
+
+const SCRIPTS = {
+  async first(r) {
+    await this.simSend(['rep'], r);
+    await this.waitFor(() => this.state.bubble && this.state.bubble.kind === 'email', r, 3000);
+    await this.sleep(700, r); await this.typeEmail(DEFAULT_EMAIL, r); await this.sleep(450, r);
+    this.submitEmail();
+  },
+  async video(r) { await this.simSend(['rep'], r); },
+  async mixed(r) { await this.simSend(['i1', 'i2', 'i3', 'raw'], r); },
+  async big(r) { await this.simSend(['wed'], r); },
+  async net(r) {
+    await this.simSend(['rep'], r);
+    await this.waitFor(() => this.prog() >= 0.6, r);
+    this.setState({ online: false }); await this.sleep(3200, r); this.setState({ online: true });
+  },
+  async second(r) {
+    await this.simSend(['rep'], r); await this.sleep(250, r); await this.simSend(['broll'], r);
+    if (this.prog() < 0.7) { await this.clickIcon(r); await this.waitFor(() => this.prog() >= 0.9, r, 1600); this.setState({ panelOpen: false }); }
+  },
+  async history(r) {
+    await this.clickIcon(r); await this.sleep(1400, r);
+    const h = this.state.history[1]; if (h) this.copyHistory(h);
+  },
+  async long(r) {
+    await this.simSend(['long'], r);
+    await this.waitFor(() => this.prog() >= 0.15, r, 4000);
+    await this.clickIcon(r); await this.waitFor(() => this.prog() >= 0.85, r, 2600);
+    this.setState({ panelOpen: false });
+  },
+  async quick(r) { await this.simSend(['con', 'site'], r); },
+  async down(r) {
+    await this.simSend(['rep'], r);
+    await this.waitFor(() => this.state.bubble && this.state.bubble.kind === 'error', r, 4000);
+    await this.sleep(1800, r); this.retry();
+  },
+};
+
+class Component extends DCLogic {
+  run = 0;
+  last = performance.now();
+  state = this.initial('video', {});
+
+  initial(id, prev) {
+    const sc = SC.find(s => s.id === id);
+    return {
+      scenario: id, wayIn: sc.quick ? 'quick' : (prev.wayIn || 'zone'), speed: prev.speed || 'normal',
+      dark: !!prev.dark, accent: prev.accent || 'blue', online: true, serviceUp: !sc.down,
+      email: sc.email ?? DEFAULT_EMAIL, emailDraft: '', emailError: '', editingEmail: false,
+      launchAtLogin: prev.launchAtLogin ?? true, files: sc.files, selected: [...sc.send],
+      queue: sc.running ? [mkPkg([{ name: 'interview-raw.mov', bytes: 3.8e9, kind: 'video' }], { sent: 1.52e9, status: 'uploading' })] : [],
+      history: sc.hist === 'none' ? [] : sc.hist === 'five' ? HIST5() : HIST2(),
+      bubble: null, bubbleHover: false, panelOpen: false, confirmQuit: false, quit: false, doneUntil: 0, errorUnseen: false,
+      dragging: false, dragItems: [], dragOver: null, ctx: null, ghost: null, pending: null,
+      clipboard: prev.clipboard || '', opened: '', copiedId: null, playing: false,
+      iconLeft: prev.iconLeft ?? 1000, iconW: prev.iconW ?? 32, scale: prev.scale ?? 1,
+    };
+  }
+
+  componentDidMount() {
+    this.timer = setInterval(this.tick, 100);
+    this.onKey = e => { if (e.key === 'Escape') this.escape(); };
+    this.onResize = () => this.fit();
+    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('resize', this.onResize);
+    this.applyTheme();
+    requestAnimationFrame(() => { this.fit(); this.measure(); });
+  }
+  componentWillUnmount() {
+    this.run++; clearInterval(this.timer);
+    window.removeEventListener('keydown', this.onKey); window.removeEventListener('resize', this.onResize);
+    if (this.ro) this.ro.disconnect();
+  }
+  componentDidUpdate() { this.applyTheme(); this.fit(); this.measure(); }
+
+  themeRef = el => { this.themeEl = el; this._tk = null; if (el) this.applyTheme(); };
+  deskRef = el => { this.deskEl = el; };
+  iconRef = el => { this.iconEl = el; };
+  focusRef = el => { if (el) el.focus({ preventScroll: true }); };
+  stageRef = el => {
+    if (this.stageEl === el) return;
+    if (this.ro) this.ro.disconnect();
+    this.stageEl = el;
+    if (el && window.ResizeObserver) { this.ro = new ResizeObserver(() => this.fit()); this.ro.observe(el); }
+    if (el) requestAnimationFrame(() => this.fit());
+  };
+
+  applyTheme() {
+    const el = this.themeEl; if (!el) return;
+    const key = (this.state.dark ? 'd' : 'l') + this.state.accent;
+    if (this._tk === key) return; this._tk = key;
+    const t = THEMES[this.state.dark ? 'dark' : 'light'];
+    for (const k in t) el.style.setProperty(k, t[k]);
+    const a = ACCENTS.find(x => x.id === this.state.accent) || ACCENTS[0];
+    el.style.setProperty('--acc', this.state.dark ? a.d : a.l);
+  }
+  fit() {
+    if (!this.stageEl) return;
+    const w = this.stageEl.clientWidth; if (!w) return;
+    const s = Math.min(1, w / 1280, Math.max(0.45, (window.innerHeight - 40) / 800));
+    if (Math.abs(s - this.state.scale) > 0.002) this.setState({ scale: s });
+  }
+  measure() {
+    const d = this.deskEl, i = this.iconEl; if (!d || !i) return;
+    const dr = d.getBoundingClientRect(), ir = i.getBoundingClientRect(); const s = dr.width / 1280 || 1;
+    const left = (ir.left - dr.left) / s, w = ir.width / s;
+    if (Math.abs(left - this.state.iconLeft) > 0.5 || Math.abs(w - this.state.iconW) > 0.5) this.setState({ iconLeft: left, iconW: w });
+  }
+  toDesk(cx, cy) {
+    const r = this.deskEl.getBoundingClientRect(); const s = r.width / 1280 || 1;
+    return { x: (cx - r.left) / s, y: (cy - r.top) / s };
+  }
+  itemCenter(id) {
+    const el = this.deskEl && this.deskEl.querySelector(`[data-fid="${id}"]`);
+    if (!el) return { x: 400, y: 300 };
+    const r = el.getBoundingClientRect(); return this.toDesk(r.left + r.width / 2, r.top + 34);
+  }
+  iconCenter() { return { x: this.state.iconLeft + this.state.iconW / 2, y: 13 }; }
+  zoneH() { return (this.props.zoneSize ?? 'compact') === 'large' ? 150 : 88; }
+  surfLeft() { return clamp(this.state.iconLeft - 8, 8, 1280 - 8 - 300); }
+  prog() { const p = this.state.queue[0]; return p ? p.sent / p.bytes : 0; }
+
+  tick = () => {
+    const now = performance.now(); const dt = Math.min(0.3, (now - this.last) / 1000); this.last = now;
+    const s = this.state; if (s.quit) return;
+    const ch = {}; const wall = Date.now();
+    if (s.bubble && s.bubble.until && !s.bubbleHover && wall > s.bubble.until) ch.bubble = null;
+    if (s.doneUntil && wall > s.doneUntil) ch.doneUntil = 0;
+    if (s.queue.length && s.queue[0].status !== 'error') {
+      const q = s.queue.slice(); const p = { ...q[0] }; q[0] = p; let done = false;
+      const fail = () => { p.status = 'error'; if (!s.panelOpen) { ch.bubble = { kind: 'error', label: p.label, pkgId: p.id }; ch.bubbleHover = false; ch.errorUnseen = true; } };
+      switch (p.status) {
+        case 'queued': p.status = p.zipTotal > 0 ? 'zipping' : 'connecting'; p.t = 0; break;
+        case 'zipping': p.zipDone = Math.min(p.zipTotal, p.zipDone + ZIP_SPEED * dt); if (p.zipDone >= p.zipTotal) { p.status = 'connecting'; p.t = 0; } break;
+        case 'connecting': p.t += dt; if (!s.online) p.status = 'reconnecting'; else if (p.t >= 0.6) { if (!s.serviceUp) fail(); else p.status = 'uploading'; } break;
+        case 'uploading': if (!s.online) p.status = 'reconnecting'; else if (!s.serviceUp) fail(); else { p.sent = Math.min(p.bytes, p.sent + SPEEDS[s.speed] * dt); if (p.sent >= p.bytes) done = true; } break;
+        case 'reconnecting': if (s.online) { p.status = 'connecting'; p.t = 0; } break;
+      }
+      if (done) {
+        q.shift();
+        const h = { id: 'h' + p.id, label: p.label, bytes: p.bytes, link: mkLink(), expires: new Date(TODAY.getTime() + 14 * DAY) };
+        ch.history = [h, ...s.history]; ch.clipboard = h.link; ch.doneUntil = wall + 2500;
+        if (s.panelOpen) { ch.copiedId = h.id; clearTimeout(this.copiedT); this.copiedT = setTimeout(() => this.setState({ copiedId: null }), 1800); }
+        else { ch.bubble = { kind: 'copied', label: h.label, bytes: h.bytes, link: h.link, expires: h.expires, until: wall + 3000 }; ch.bubbleHover = false; }
+      }
+      ch.queue = q;
+    }
+    if (Object.keys(ch).length) this.setState(ch);
+  };
+
+  send(ids) {
+    const s = this.state; if (s.quit) return;
+    const items = s.files.filter(f => ids.includes(f.id)); if (!items.length) return;
+    const total = items.reduce((a, f) => a + f.bytes, 0);
+    const base = { dragging: false, dragOver: null, dragItems: [], ctx: null, panelOpen: false, confirmQuit: false, editingEmail: false, bubbleHover: false };
+    if (total > LIMIT) return this.setState({ ...base, bubble: { kind: 'big', bytes: total, until: Date.now() + 5000 } });
+    if (!s.email) return this.setState({ ...base, pending: ids, emailDraft: '', emailError: '', bubble: { kind: 'email', label: labelOf(items) } });
+    const keep = s.bubble && (s.bubble.kind === 'copied' || s.bubble.kind === 'error') ? s.bubble : null;
+    this.setState({ ...base, bubble: keep, queue: [...s.queue, mkPkg(items)] });
+  }
+  submitEmail = () => {
+    const v = this.state.emailDraft.trim();
+    if (!EMAIL_RE.test(v)) return this.setState({ emailError: 'That doesn’t look like an email address.' });
+    const ids = this.state.pending;
+    this.setState({ email: v, bubble: null, pending: null, emailError: '' }, () => { if (ids) this.send(ids); });
+  };
+  retry = () => {
+    const s = this.state; const sc = SC.find(x => x.id === s.scenario);
+    const q = s.queue.map((p, i) => i === 0 && p.status === 'error' ? { ...p, status: 'connecting', t: 0 } : p);
+    this.setState({ queue: q, bubble: null, errorUnseen: false, serviceUp: s.serviceUp || !!sc.down });
+  };
+  cancel(pid) {
+    this.setState(s => {
+      const q = s.queue.filter(p => p.id !== pid); const ch = { queue: q };
+      if (s.bubble && s.bubble.pkgId === pid) ch.bubble = null;
+      if (!q.length || q[0].status !== 'error') ch.errorUnseen = false;
+      if (!q.length) ch.confirmQuit = false;
+      return ch;
+    });
+  }
+  copyHistory(h) {
+    clearTimeout(this.copiedT);
+    this.setState({ clipboard: h.link, copiedId: h.id });
+    this.copiedT = setTimeout(() => this.setState({ copiedId: null }), 1400);
+  }
+  escape() {
+    const s = this.state;
+    if (s.ctx) return this.setState({ ctx: null });
+    if (s.editingEmail) return this.setState({ editingEmail: false, emailError: '' });
+    if (s.panelOpen) return this.setState({ panelOpen: false, confirmQuit: false });
+    if (s.bubble) this.setState({ bubble: null, pending: null, errorUnseen: false });
+  }
+
+  sleep(ms, r) { return new Promise((res, rej) => setTimeout(() => (r === this.run ? res() : rej(new Error('stopped'))), ms)); }
+  async waitFor(cond, r, timeout = 20000) { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > timeout) return; await this.sleep(100, r); } }
+  async typeEmail(str, r) { for (let i = 1; i <= str.length; i++) { this.setState({ emailDraft: str.slice(0, i), emailError: '' }); await this.sleep(38, r); } }
+  simSend(ids, r) { return this.state.wayIn === 'quick' ? this.simQuick(ids, r) : this.simDrag(ids, r); }
+  async simDrag(ids, r) {
+    const zone = this.state.wayIn === 'zone';
+    this.setState({ selected: ids, panelOpen: false, ctx: null });
+    await this.sleep(350, r);
+    const from = this.itemCenter(ids[0]);
+    this.setState({ ghost: { x: from.x, y: from.y, ids } });
+    await this.sleep(90, r);
+    this.setState({ dragItems: ids, dragging: true });
+    await this.sleep(140, r);
+    const to = zone ? { x: this.surfLeft() + 150, y: 30 + this.zoneH() / 2 } : this.iconCenter();
+    this.setState(s => ({ ghost: { ...s.ghost, x: to.x, y: to.y } }));
+    await this.sleep(820, r);
+    this.setState({ dragOver: zone ? 'zone' : 'icon' });
+    await this.sleep(480, r);
+    this.setState({ ghost: null });
+    this.send(ids);
+  }
+  async simQuick(ids, r) {
+    this.setState({ selected: ids, panelOpen: false, ctx: null });
+    await this.sleep(300, r);
+    const c = this.itemCenter(ids[ids.length - 1]);
+    this.setState({ ghost: { x: c.x - 150, y: c.y + 140, ids: [] } }); await this.sleep(60, r);
+    this.setState(s => ({ ghost: { ...s.ghost, x: c.x, y: c.y } })); await this.sleep(820, r);
+    const mx = Math.min(c.x, 1280 - 240), my = Math.min(c.y, 800 - 310);
+    this.setState({ ctx: { x: mx, y: my, sub: false, subHl: false } }); await this.sleep(450, r);
+    const qaY = my + 5 + 10 * 22 + 4 * 11 + 11;
+    this.setState(s => ({ ghost: { ...s.ghost, x: mx + 110, y: qaY } })); await this.sleep(820, r);
+    this.setState(s => ({ ctx: s.ctx && { ...s.ctx, sub: true } })); await this.sleep(350, r);
+    const subX = mx + 5 + this.subOff(mx) + 100;
+    this.setState(s => ({ ghost: { ...s.ghost, x: subX, y: qaY } })); await this.sleep(820, r);
+    this.setState(s => ({ ctx: s.ctx && { ...s.ctx, subHl: true } })); await this.sleep(350, r);
+    this.setState({ ghost: null });
+    this.send(this.state.selected);
+  }
+  async clickIcon(r) {
+    const to = this.iconCenter();
+    this.setState({ ghost: { x: to.x - 160, y: to.y + 200, ids: [] } }); await this.sleep(60, r);
+    this.setState(s => ({ ghost: { ...s.ghost, x: to.x, y: to.y } })); await this.sleep(850, r);
+    this.setState({ panelOpen: true, bubble: null, pending: null, errorUnseen: false });
+    await this.sleep(250, r); this.setState({ ghost: null });
+  }
+  subOff(mx) { return mx + 230 + 224 > 1272 ? -224 : 224; }
+
+  pick(id) { this.run++; this.setState(this.initial(id, this.state)); }
+  async play() {
+    const id = this.state.scenario;
+    this.run++; this.setState({ ...this.initial(id, this.state), playing: true });
+    const r = this.run;
+    try {
+      await this.sleep(450, r);
+      await SCRIPTS[id].call(this, r);
+      await this.waitFor(() => !this.state.queue.length && !this.state.ghost, r, 30000);
+    } catch (e) { /* stopped */ }
+    if (r === this.run) this.setState({ playing: false });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const showPctProp = this.props.showPercent ?? false;
+    const zoneH = this.zoneH();
+    const active = s.queue[0];
+    const prog = active && active.status !== 'zipping' && active.status !== 'queued' ? active.sent / active.bytes : 0;
+    let iconState = 'idle';
+    if (s.dragOver) iconState = 'target';
+    else if (s.doneUntil) iconState = 'done';
+    else if (s.errorUnseen) iconState = 'error';
+    else if (active) iconState = { zipping: 'zipping', queued: 'zipping', connecting: 'progress', uploading: 'progress', reconnecting: 'paused', error: 'paused' }[active.status];
+    const showPct = !s.quit && showPctProp && (iconState === 'progress' || iconState === 'paused');
+
+    const dragFiles = s.dragItems.map(id => s.files.find(f => f.id === id)).filter(Boolean);
+    const dragBytes = dragFiles.reduce((a, f) => a + f.bytes, 0);
+    const over = s.dragOver === 'zone';
+    const tooBig = dragBytes > LIMIT;
+
+    const b = s.bubble;
+    const [bHead, bTail] = split(b && b.label);
+
+    const uploads = s.queue.map((p, i) => {
+      const [head, tail] = split(p.label);
+      let status = '', pct = 0, showBar = true, barColor = 'var(--acc)', statusColor = 'var(--fg2)';
+      if (i > 0) { status = 'Waiting · ' + fmtBytes(p.bytes); showBar = false; }
+      else if (p.status === 'queued' || p.status === 'zipping') { status = `Zipping “${p.zipName}”…`; pct = p.zipTotal ? p.zipDone / p.zipTotal : 0; barColor = 'var(--fg3)'; }
+      else if (p.status === 'connecting') { status = p.sent > 0 ? `Resuming at ${fmtBytes(p.sent)}…` : 'Connecting to Úschovna…'; pct = p.sent / p.bytes; }
+      else if (p.status === 'uploading') { status = `${fmtBytes(p.sent)} of ${fmtBytes(p.bytes)} · ${fmtLeft((p.bytes - p.sent) / SPEEDS[s.speed])}`; pct = p.sent / p.bytes; }
+      else if (p.status === 'reconnecting') { status = `Reconnecting… ${fmtBytes(p.sent)} of ${fmtBytes(p.bytes)} sent`; pct = p.sent / p.bytes; barColor = 'var(--fg3)'; }
+      else if (p.status === 'error') { status = 'Úschovna isn’t answering'; pct = p.sent / p.bytes; barColor = 'var(--fg3)'; statusColor = 'var(--red)'; }
+      return { id: p.id, head, tail, full: p.label, status, pct: (pct * 100).toFixed(1) + '%', showBar, barColor, statusColor, isError: i === 0 && p.status === 'error', cancel: () => this.cancel(p.id), retry: this.retry };
+    });
+
+    const hist = s.history.filter(h => h.expires > TODAY).map(h => {
+      const d = Math.round((h.expires - TODAY) / DAY); const copied = s.copiedId === h.id; const [head, tail] = split(h.label);
+      return {
+        id: h.id, head, tail, full: h.label,
+        meta: copied ? '✓ Link copied' : `${fmtBytes(h.bytes)} · ${d <= 0 ? 'expires today' : d === 1 ? 'expires tomorrow' : d + ' days left'}`,
+        metaColor: copied ? 'var(--acc)' : d <= 1 ? 'var(--orange)' : 'var(--fg2)',
+        copy: () => this.copyHistory(h),
+        open: e => { e.stopPropagation(); this.setState({ opened: h.link }); },
+      };
+    });
+
+    const files = s.files.map(f => {
+      const sel = s.selected.includes(f.id);
+      return {
+        ...f, sizeText: fmtBytes(f.bytes), isFolder: f.kind === 'folder', isFile: f.kind !== 'folder', color: KIND[f.kind],
+        iconBg: sel ? 'var(--sel)' : 'transparent', nameBg: sel ? 'var(--acc)' : 'transparent', nameFg: sel ? '#fff' : 'var(--fg)',
+        onDown: e => {
+          if (e.button !== 0) return; this.didDrag = false;
+          const cur = this.state.selected;
+          if (e.metaKey || e.shiftKey) this.setState({ selected: cur.includes(f.id) ? cur.filter(x => x !== f.id) : [...cur, f.id] });
+          else if (!cur.includes(f.id)) this.setState({ selected: [f.id] });
+        },
+        onClick: e => { if (!this.didDrag && !e.metaKey && !e.shiftKey) this.setState({ selected: [f.id] }); },
+        onDragStart: e => {
+          const cur = this.state.selected; const ids = cur.includes(f.id) ? cur : [f.id]; this.didDrag = true;
+          try { e.dataTransfer.setData('text/plain', ids.join(',')); e.dataTransfer.effectAllowed = 'copy'; } catch (x) { }
+          setTimeout(() => this.setState({ selected: ids, dragItems: ids, dragging: true, panelOpen: false, ctx: null }), 0);
+        },
+        onCtx: e => {
+          e.preventDefault(); e.stopPropagation();
+          const cur = this.state.selected; const sel2 = cur.includes(f.id) ? cur : [f.id]; const pt = this.toDesk(e.clientX, e.clientY);
+          this.setState({ selected: sel2, ctx: { x: Math.min(pt.x, 1280 - 240), y: Math.min(pt.y, 800 - 310), sub: false, subHl: false }, panelOpen: false });
+        },
+      };
+    });
+
+    const ctx = s.ctx; const nSel = s.selected.length;
+    const selOne = nSel === 1 ? s.files.find(f => f.id === s.selected[0]) : null;
+    const g = s.ghost; const gFirst = g && g.ids.length ? s.files.find(f => f.id === g.ids[0]) : null;
+    const sc = SC.find(x => x.id === s.scenario);
+    const how = { icon: 'Drag the selected files onto the menu-bar icon.', zone: 'Start dragging the selected files. The drop zone opens under the icon.', quick: 'Right-click the selected files, then Quick Actions › Send with Úschovna.' }[s.wayIn];
+    const extra = { first: ' The bubble asks for the sender email first.', net: ' Switch Network off mid-upload.', second: ' Then send b-roll.mov while report.mov uploads.', long: ' Open the panel while it uploads.', down: ' Try Again in the bubble brings Úschovna back.' }[s.scenario] || '';
+    const seg = (sel) => ({ bg: sel ? '#fff' : 'transparent', shadow: sel ? '0 1px 2px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.06)' : 'none', fw: sel ? 600 : 400 });
+    const n = s.queue.length;
+
+    return {
+      stageRef: this.stageRef, deskRef: this.deskRef, themeRef: this.themeRef, iconRef: this.iconRef, focusRef: this.focusRef,
+      scale: s.scale, stageH: Math.round(800 * s.scale),
+      stop: e => e.stopPropagation(),
+      scenarioList: SC.map((c, i) => { const sel = c.id === s.scenario; return { n: i + 1, title: c.title, sub: c.sub, pick: () => this.pick(c.id), bg: sel ? '#1d1d1f' : 'transparent', fg: sel ? '#fff' : '#1d1d1f', subFg: sel ? 'rgba(255,255,255,.66)' : '#6e6e73' }; }),
+      playLabel: s.playing ? 'Stop' : 'Play scenario',
+      playToggle: () => { if (s.playing) { this.run++; this.setState({ playing: false, ghost: null }); } else this.play(); },
+      reset: () => this.pick(s.scenario),
+      instruction: s.scenario === 'history' ? 'Click the menu-bar icon to open the panel. Click a link to copy it again.' : how + extra,
+      appQuit: s.quit, appRunning: !s.quit, relaunch: () => this.setState({ quit: false }),
+      wayOpts: [['icon', 'Icon'], ['zone', 'Drop zone'], ['quick', 'Quick Action']].map(([id, label]) => ({ label, ...seg(s.wayIn === id), pick: () => { this.run++; this.setState({ wayIn: id, playing: false, ghost: null, ctx: null }); } })),
+      speedOpts: [['slow', '60 MB/s'], ['normal', '300 MB/s'], ['fast', '800 MB/s']].map(([id, label]) => ({ label, ...seg(s.speed === id), pick: () => this.setState({ speed: id }) })),
+      appearOpts: [[false, 'Light'], [true, 'Dark']].map(([v, label]) => ({ label, ...seg(s.dark === v), pick: () => this.setState({ dark: v }) })),
+      accentOpts: ACCENTS.map(a => ({ id: a.id, color: a.l, ring: s.accent === a.id ? `0 0 0 2px #ececef, 0 0 0 3.5px ${a.l}` : 'inset 0 0 0 .5px rgba(0,0,0,.15)', pick: () => this.setState({ accent: a.id }) })),
+      toggleNet: () => this.setState({ online: !s.online }), netLabel: s.online ? 'Online' : 'Offline', netTrack: s.online ? '#34C759' : '#d1d1d6', netKnob: s.online ? '14px' : '2px',
+      toggleSvc: () => this.setState({ serviceUp: !s.serviceUp }), svcLabel: s.serviceUp ? 'Answering' : 'Down', svcTrack: s.serviceUp ? '#34C759' : '#d1d1d6', svcKnob: s.serviceUp ? '14px' : '2px',
+      clipText: s.clipboard || 'Empty', clipFg: s.clipboard ? '#1d1d1f' : '#86868b',
+      openedText: s.opened || 'Nothing yet', openedFg: s.opened ? '#1d1d1f' : '#86868b',
+
+      onDeskDown: () => {
+        const ch = {};
+        if (s.ctx) ch.ctx = null;
+        if (s.panelOpen) { ch.panelOpen = false; ch.confirmQuit = false; ch.editingEmail = false; }
+        if (s.bubble && s.bubble.kind !== 'copied') { ch.bubble = null; ch.pending = null; if (s.bubble.kind === 'error') ch.errorUnseen = false; }
+        if (Object.keys(ch).length) this.setState(ch);
+      },
+      onFinderDown: e => { if (e.target === e.currentTarget) this.setState({ selected: [] }); },
+      onFinderCtx: e => e.preventDefault(),
+      onDragEnd: () => this.setState({ dragging: false, dragOver: null, dragItems: [] }),
+      files,
+
+      itemBg: s.panelOpen ? 'var(--barsel)' : 'transparent',
+      iconState, iconProgress: iconState === 'done' ? 1 : prog, showPct, pctText: Math.floor(prog * 100) + '%',
+      toggleIcon: () => {
+        if (this.state.panelOpen) this.setState({ panelOpen: false, confirmQuit: false, editingEmail: false });
+        else this.setState({ panelOpen: true, bubble: null, pending: null, errorUnseen: false, ctx: null });
+      },
+      iconDragOver: e => {
+        if (this.state.wayIn === 'quick' || !this.state.dragItems.length) return;
+        e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) { }
+        if (this.state.dragOver !== 'icon') this.setState({ dragOver: 'icon' });
+      },
+      iconDragLeave: () => { if (this.state.dragOver === 'icon') this.setState({ dragOver: null }); },
+      iconDrop: e => { e.preventDefault(); this.send(this.state.dragItems); },
+
+      surfLeft: this.surfLeft(), zoneH,
+      showZone: s.dragging && s.wayIn === 'zone' && !s.quit,
+      zoneDragOver: e => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (x) { } if (this.state.dragOver !== 'zone') this.setState({ dragOver: 'zone' }); },
+      zoneDragLeave: () => { if (this.state.dragOver === 'zone') this.setState({ dragOver: null }); },
+      zoneDrop: e => { e.preventDefault(); this.send(this.state.dragItems); },
+      zoneBorder: over ? 'var(--acc)' : 'var(--fg3)',
+      zoneBg: over ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent',
+      zoneFg: over ? 'var(--acc)' : 'var(--fg2)',
+      zoneGlyph: over ? 'open' : 'idle',
+      zoneText: over ? 'Release to send' : 'Drop here to send',
+      zoneSub: dragFiles.length ? (tooBig ? `${fmtBytes(dragBytes)}, over the 30 GB limit` : `${labelOf(dragFiles)} · ${fmtBytes(dragBytes)}`) : '',
+      zoneSubFg: tooBig ? 'var(--orange)' : 'var(--fg2)',
+
+      hasBubble: !!b && !s.quit,
+      bIsCopied: !!b && b.kind === 'copied', bIsEmail: !!b && b.kind === 'email', bIsBig: !!b && b.kind === 'big', bIsError: !!b && b.kind === 'error',
+      bHead, bTail, bSize: b && b.bytes ? fmtBytes(b.bytes) : '', bExpires: b && b.expires ? fmtDate(b.expires) : '', bHover: s.bubbleHover,
+      bubbleEnter: () => this.setState({ bubbleHover: true }),
+      bubbleLeave: () => this.setState(st => ({ bubbleHover: false, bubble: st.bubble && st.bubble.until ? { ...st.bubble, until: Date.now() + 1500 } : st.bubble })),
+      bubbleClick: () => { const bb = this.state.bubble; if (bb && bb.kind === 'copied') this.setState({ opened: bb.link, bubble: null }); else if (bb && bb.kind === 'error') this.setState({ errorUnseen: false }); },
+      retry: e => { if (e && e.stopPropagation) e.stopPropagation(); this.retry(); },
+      emailDraft: s.emailDraft,
+      onEmailDraft: e => this.setState({ emailDraft: e.target.value, emailError: '' }),
+      onBubbleEmailKey: e => { if (e.key === 'Enter') { e.preventDefault(); this.submitEmail(); } },
+      emailHint: s.emailError || (b && b.kind === 'email' ? `Press Return to send ${b.label}.` : ''),
+      emailHintFg: s.emailError ? 'var(--red)' : 'var(--fg2)',
+
+      panelOpen: s.panelOpen && !s.quit,
+      hasQueue: n > 0, uploads,
+      hasHistory: hist.length > 0, noHistory: hist.length === 0, hist,
+      editingEmail: s.editingEmail, notEditingEmail: !s.editingEmail,
+      emailShown: s.email || 'Not set', emailError: s.emailError, panelEmailError: s.editingEmail && !!s.emailError,
+      startEditEmail: () => this.setState({ editingEmail: true, emailDraft: s.email, emailError: '' }),
+      onPanelEmailKey: e => {
+        if (e.key !== 'Enter') return; e.preventDefault();
+        const v = this.state.emailDraft.trim();
+        if (EMAIL_RE.test(v)) this.setState({ email: v, editingEmail: false, emailError: '' });
+        else this.setState({ emailError: 'That doesn’t look like an email address.' });
+      },
+      commitPanelEmail: () => {
+        const v = this.state.emailDraft.trim();
+        this.setState(EMAIL_RE.test(v) ? { email: v, editingEmail: false, emailError: '' } : { editingEmail: false, emailError: '' });
+      },
+      toggleLaunch: () => this.setState({ launchAtLogin: !s.launchAtLogin }),
+      launchTrack: s.launchAtLogin ? 'var(--acc)' : 'var(--fill)', launchKnob: s.launchAtLogin ? '12.5px' : '1.5px',
+      notConfirmQuit: !s.confirmQuit, confirmQuit: s.confirmQuit,
+      quitDetail: n === 1 ? `${s.queue[0].label} hasn’t finished uploading.` : `${n} uploads haven’t finished.`,
+      quitClick: () => { if (n) this.setState({ confirmQuit: true }); else this.setState({ quit: true, panelOpen: false }); },
+      cancelQuit: () => this.setState({ confirmQuit: false }),
+      doQuit: () => { this.run++; this.setState({ quit: true, panelOpen: false, confirmQuit: false, queue: [], bubble: null, errorUnseen: false, doneUntil: 0, playing: false, ghost: null }); },
+
+      hasCtx: !!ctx, ctxX: ctx ? ctx.x : 0, ctxY: ctx ? ctx.y : 0, ctxSub: !!ctx && ctx.sub,
+      compressLabel: selOne ? `Compress “${selOne.name}”` : `Compress ${nSel} Items`,
+      qaBg: ctx && ctx.sub ? 'var(--acc)' : 'transparent', qaFg: ctx && ctx.sub ? '#fff' : 'var(--fg)',
+      subOff: ctx ? this.subOff(ctx.x) : 224,
+      showSendQA: s.wayIn === 'quick',
+      sendBg: ctx && ctx.subHl ? 'var(--acc)' : 'transparent', sendFg: ctx && ctx.subHl ? '#fff' : 'var(--fg)',
+      ctxSubOpen: () => { if (this.state.ctx && !this.state.ctx.sub) this.setState(st => ({ ctx: { ...st.ctx, sub: true } })); },
+      ctxSubClose: () => { if (this.state.ctx && this.state.ctx.sub) this.setState(st => ({ ctx: { ...st.ctx, sub: false, subHl: false } })); },
+      sendEnter: () => this.setState(st => ({ ctx: st.ctx && { ...st.ctx, subHl: true } })),
+      sendLeave: () => this.setState(st => ({ ctx: st.ctx && { ...st.ctx, subHl: false } })),
+      ctxSend: e => { e.stopPropagation(); this.send(this.state.selected); },
+      ctxClose: e => { e.stopPropagation(); this.setState({ ctx: null }); },
+
+      hasGhost: !!g, gx: g ? g.x : 0, gy: g ? g.y : 0,
+      ghostHasFile: !!gFirst, ghostExt: gFirst ? (gFirst.kind === 'folder' ? 'DIR' : gFirst.ext) : '', ghostColor: gFirst ? KIND[gFirst.kind] : '#000',
+      ghostBadge: !!g && g.ids.length > 1, ghostCount: g ? g.ids.length : 0,
+
+      iconSheet: [
+        { state: 'idle', p: 0, title: 'Idle', note: 'A parcel with an up arrow.' },
+        { state: 'target', p: 0, title: 'File over it', note: 'The box opens, the arrow points in, and the item gets an accent highlight. The drop zone uses the open box without the highlight.' },
+        { state: 'zipping', p: 0, title: 'Zipping a folder', note: 'A dashed ring until the zip is ready.' },
+        { state: 'progress', p: 0.35, title: 'Uploading', note: 'The ring fills clockwise.' },
+        { state: 'progress', p: 0.62, pct: '62%', title: 'Uploading, with %', note: 'Adds about 28 pt and changes width as uploads start and end. Off by default.' },
+        { state: 'paused', p: 0.6, title: 'Reconnecting', note: 'The ring dims where it stopped, with pause bars in the middle.' },
+        { state: 'done', p: 1, title: 'Done', note: 'A filled check for 2.5 s while the bubble is out.' },
+        { state: 'error', p: 0, title: 'Needs a look', note: 'A badge that stays until you see the bubble or open the panel.' },
+      ].map(x => ({ ...x, hasPct: !!x.pct })),
+    };
+  }
+}
+</script>
+</body>
+</html>

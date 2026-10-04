@@ -29,9 +29,10 @@ One developer, one user, so keep it simple.
 
 ## Rules that are expensive to forget
 
-- **The repository is public.** Anyone can read every commit. No keys, tokens, certificates,
-  personal email addresses or Team IDs in the repo; release secrets live only in the GitHub
-  `release` environment, which the maintainer manages. Agents never handle signing keys.
+- **The repository is public.** Anyone can read every commit. No keys, tokens, certificates or
+  personal email addresses in the repo; release secrets live only in the GitHub `release`
+  environment, which the maintainer manages. Agents never handle signing keys. The Team ID in
+  `project.pbxproj` is fine: every signed app carries it in its signature anyway.
 - **Stay minimal.** The point of the app is fewer steps than the website. Every screen, field and
   click needs a reason.
 - **Úschovna has no API and the app is unofficial.** It uses the website's own upload; their terms
