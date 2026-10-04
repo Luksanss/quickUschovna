@@ -1,0 +1,132 @@
+# Every push to main builds quickUschovna and publishes it as a GitHub Release. See docs/releasing.md.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    # Releases only come from main, even when the workflow is run by hand.
+    if: github.ref == 'refs/heads/main'
+    # The signing secrets live in this environment, which only main can use (docs/releasing.md).
+    environment: release
+    # GitHub's Xcode 27 image: macOS 27 on arm64. It's the only hosted image with Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      XCODE: /Applications/Xcode_27.0.app
+    steps:
+      # Actions are pinned by commit, because the signing key is unlocked while later steps run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the version counts every commit, and the notes start at the last tag
+
+      - name: Select Xcode 27
+        run: |
+          if [[ -d $XCODE ]]; then
+            sudo xcode-select -s "$XCODE"
+          else
+            echo "::warning::$XCODE isn't on this runner, so the build uses the image's default Xcode."
+          fi
+          # Read it whole: `xcodebuild -version | grep -q` makes xcodebuild crash with a broken pipe
+          # once grep stops reading, and pipefail turns that into a failure.
+          version=$(xcodebuild -version)
+          echo "$version"
+          if [[ $version != "Xcode 27."* ]]; then
+            echo "::error::quickUschovna needs Xcode 27 (the macOS 27 SDK), and this runner doesn't have it."
+            exit 1
+          fi
+
+      - name: Work out the version
+        id: version
+        run: |
+          marketing=$(xcodebuild -project quickUschovna.xcodeproj -target quickUschovna -configuration Release \
+            -showBuildSettings | awk '$1 == "MARKETING_VERSION" { print $3 }')
+          [[ -n $marketing ]] || { echo "::error::The quickUschovna target has no MARKETING_VERSION."; exit 1; }
+          build=$(git rev-list --count HEAD)
+          version=$marketing.$build
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v$version already exists, so there's nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Import the signing certificate
+        if: steps.version.outputs.exists != 'true'
+        env:
+          P12: ${{ secrets.SIGNING_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          # macOS may not load the Quick Action of an ad-hoc app, and every ad-hoc release would look
+          # like a different app to macOS, so there's no fallback.
+          if [[ -z $P12 ]]; then
+            echo "::error::The SIGNING_CERT_P12 secret isn't set in the release environment (docs/releasing.md)."
+            exit 1
+          fi
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(uuidgen)
+          base64 --decode <<< "$P12" > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" \
+            | awk '/"Apple Development/ && !id { id = $2 } END { print id }')
+          [[ -n $identity ]] || { echo "::error::SIGNING_CERT_P12 has no Apple Development identity."; exit 1; }
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "Signed with the Apple Development certificate." >> "$GITHUB_STEP_SUMMARY"
+
+      # dmgbuild, which lays out the disk image, needs Python 3.10 or later.
+      - name: Set up Python
+        if: steps.version.outputs.exists != 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Build
+        if: steps.version.outputs.exists != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+        run: scripts/build-release.sh
+
+      - name: Write the release notes
+        if: steps.version.outputs.exists != 'true'
+        run: scripts/make-release-notes.sh
+
+      - name: Publish the release
+        if: steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dmg=build/release/quickUschovna-$VERSION.dmg
+          gh release create "v$VERSION" "$dmg" --title "quickUschovna $VERSION" \
+            --notes-file build/release/notes.md --target "$GITHUB_SHA"
+          {
+            echo "- Released [v$VERSION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION)."
+            echo "- SHA-256 of the disk image: \`$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP/cert.p12"
