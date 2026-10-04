@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The drop zone that fades in under the icon while files are dragged anywhere on screen
-/// (`model.drag`), including its chrome and shadow room. 300 × 88 pt: a dashed target inside 6 pt
-/// of padding, which turns accent while the drag is over it.
+/// The drop zone that fades in under the icon once a file drag comes near it, until the drag ends
+/// (`model.isDropZoneOpen`), including its chrome and shadow room. 300 × 88 pt: a dashed target
+/// inside 6 pt of padding, which turns accent while the drag is over it.
 struct DropZoneView: View {
     let model: AppModel
 

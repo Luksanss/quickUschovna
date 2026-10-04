@@ -6,12 +6,13 @@ import os
 /// notification `com.luksanss.quickUschovna.debug` with the command as its object and the
 /// arguments under `args` in its user info. `scripts/debug-control.swift` posts them.
 ///
-/// Commands: `send <path>…` (as a drop), `drag <path>…` (a file drag starts), `over` / `out` (the
-/// drag moves over the drop zone / off it), `icon` (over the menu-bar icon), `enddrag`, `panel`
-/// (a click on the icon), `outside` (a click in another app), `escape`, `email <address>` (typed
-/// into whichever email field is open, then Return), `copy <index>` (a click on a Recent row),
-/// `cancel` (the first package's cancel button), `retry`, `hover` / `unhover` (the bubble),
-/// `editemail`, `quit`, `dump <file>` (the model's state and every window's frame, as text).
+/// Commands: `send <path>…` (as a drop), `drag <path>…` (a file drag starts), `icon` / `unicon`
+/// (the drag comes over the menu-bar icon, which opens the drop zone / leaves it), `over` / `out`
+/// (the drag moves over the drop zone / off it), `enddrag`, `panel` (a click on the icon),
+/// `outside` (a click in another app), `escape`, `email <address>` (typed into whichever email
+/// field is open, then Return), `copy <index>` (a click on a Recent row), `cancel` (the first
+/// package's cancel button), `retry`, `hover` / `unhover` (the bubble), `editemail`, `quit`,
+/// `dump <file>` (the model's state and every window's frame, as text).
 final class DebugControl {
     static let notificationName = Notification.Name("com.luksanss.quickUschovna.debug")
     private let model: AppModel
@@ -41,7 +42,8 @@ final class DebugControl {
             }
         case "over": model.drag?.isOver = true
         case "out": model.drag?.isOver = false
-        case "icon": model.isDragOverIcon = true
+        case "icon": model.dragOverIcon(true)
+        case "unicon": model.dragOverIcon(false)
         case "enddrag":
             model.drag = nil
             model.isDragOverIcon = false

@@ -16,23 +16,33 @@ final class StatusItemController {
         button.target = self
         button.action = #selector(clicked)
         if let window = button.window {
-            drop.onHover = { [weak model] over in model?.isDragOverIcon = over }
+            drop.onHover = { [weak model] over in model?.dragOverIcon(over) }
             drop.onDrop = { [weak model] urls in model?.send(urls) }
             drop.attach(to: window)
         }
         observe { [weak self] in self?.update() }
     }
 
-    /// The item's frame on screen, which the surfaces hang from.
-    var frameOnScreen: NSRect? {
-        guard let button = item.button, let window = button.window else { return nil }
-        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    /// Where the surfaces hang, in screen coordinates: their left edge, 8 pt left of the item and
+    /// kept 8 pt inside the screen, their top, 6 pt under the menu bar, and the item's screen.
+    var surfaceAnchor: (left: CGFloat, top: CGFloat, screen: NSRect)? {
+        guard let button = item.button, let window = button.window,
+              let screen = window.screen?.frame else { return nil }
+        let itemFrame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        let lowest = screen.minX + SurfaceMetrics.screenMargin
+        let highest = screen.maxX - SurfaceMetrics.screenMargin - SurfaceMetrics.width
+        let left = min(max(itemFrame.minX - SurfaceMetrics.leadingOffset, lowest), highest)
+        return (left, window.frame.minY - SurfaceMetrics.gapBelowMenuBar, screen)
     }
 
-    /// The bottom of the menu bar the item is in, and that bar's screen.
-    var menuBarBottom: (y: CGFloat, screen: NSScreen)? {
-        guard let window = item.button?.window, let screen = window.screen else { return nil }
-        return (window.frame.minY, screen)
+    /// Where a file drag opens the drop zone before it reaches the item: the zone's place, widened
+    /// by `SurfaceMetrics.dropZoneApproach` to its sides and below, and the menu bar above it.
+    var dropZoneApproach: NSRect? {
+        guard let anchor = surfaceAnchor else { return nil }
+        let margin = SurfaceMetrics.dropZoneApproach
+        let bottom = anchor.top - SurfaceMetrics.dropZoneHeight - margin
+        return NSRect(x: anchor.left - margin, y: bottom,
+                      width: SurfaceMetrics.width + 2 * margin, height: anchor.screen.maxY - bottom)
     }
 
     private func update() {

@@ -31,7 +31,7 @@ final class AppModel {
     var launchAtLogin = false
     /// The Recent row showing "✓ Link copied" for a moment.
     var copiedRecordID: UUID?
-    /// A file drag in progress anywhere on screen; the drop zone is open while it's set.
+    /// A file drag in progress anywhere on screen (`DragMonitor`).
     var drag: DragSummary?
     /// A file drag is over the menu-bar icon itself.
     var isDragOverIcon = false
@@ -42,6 +42,12 @@ final class AppModel {
 
     /// The links in Recent: valid ones, newest first.
     var recentLinks: [LinkRecord] { history.filter { $0.isValid() } }
+
+    /// The drop zone opens once a file drag comes near the menu-bar icon (`DragMonitor`) or onto it,
+    /// and stays until the drag ends. The prototype opens it for every file drag, which on a real
+    /// desktop got in the way of ordinary drags in Finder. Waiting for the icon itself made the drag
+    /// run into the top of the screen, which macOS takes as a request for Mission Control.
+    var isDropZoneOpen: Bool { drag?.isZoneOpen == true }
 
     var iconState: MenuBarIconState {
         if isDragOverIcon || drag?.isOver == true { return .target }
@@ -482,6 +488,15 @@ final class AppModel {
     func quitNow() {
         for package in queue { cancel(package.id) }
         NSApp.terminate(nil)
+    }
+
+    // MARK: The drag
+
+    /// A file drag came over the menu-bar icon (true) or left it (false). Reaching the icon opens
+    /// the drop zone for the rest of the drag, if coming near it hasn't already.
+    func dragOverIcon(_ over: Bool) {
+        isDragOverIcon = over
+        if over { drag?.isZoneOpen = true }
     }
 
     // MARK: Dismissal, from the surfaces

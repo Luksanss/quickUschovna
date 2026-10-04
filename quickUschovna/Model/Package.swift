@@ -78,6 +78,8 @@ struct DragSummary: Equatable {
     var bytes: Int64?
     /// The drag is over the drop zone (or the icon), so the zone shows "Release to send".
     var isOver = false
+    /// The drag has come near the menu-bar icon or onto it, so the drop zone is open until it ends.
+    var isZoneOpen = false
 
     var isTooBig: Bool { (bytes ?? 0) > Limits.freePackageBytes }
 }

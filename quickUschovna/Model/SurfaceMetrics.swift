@@ -13,6 +13,9 @@ enum SurfaceMetrics {
     static let leadingOffset: CGFloat = 8
     /// The closest a surface gets to the screen's left or right edge.
     static let screenMargin: CGFloat = 8
+    /// A file drag this close to the drop zone's place, to its sides or below it, opens the zone
+    /// before it reaches the icon.
+    static let dropZoneApproach: CGFloat = 80
     /// Room around a surface inside its window for the shadow
     /// (`0 12px 32px rgba(0,0,0,.2)`), so the window can stay transparent there.
     static let shadowInsets = (top: CGFloat(24), leading: CGFloat(36), bottom: CGFloat(48), trailing: CGFloat(36))

@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 /// Shows and hides the three surfaces that hang from the menu-bar icon, following `AppModel`: the
-/// drop zone while a file drag is on, the bubble, and the panel. Each one starts 8 pt left of the
-/// item and 6 pt below the menu bar, kept 8 pt inside the screen (`SurfaceMetrics`), on the display
-/// whose menu bar holds the item.
+/// drop zone once a file drag comes near the icon, the bubble, and the panel. Each one starts 8 pt
+/// left of the item and 6 pt below the menu bar, kept 8 pt inside the screen (`SurfaceMetrics`), on
+/// the display whose menu bar holds the item.
 final class SurfacePresenter {
     private let model: AppModel
     private let statusItem: StatusItemController
@@ -38,20 +38,15 @@ final class SurfacePresenter {
         // The first-run bubble has the email field, so it takes the keyboard.
         var bubbleTakesKeys = false
         if case .email = model.bubble { bubbleTakesKeys = true }
-        zone.setVisible(model.drag != nil, takesKeys: false)
+        zone.setVisible(model.isDropZoneOpen, takesKeys: false)
         bubble.setVisible(showsBubble, takesKeys: bubbleTakesKeys)
         panel.setVisible(isPanelOpen, takesKeys: true)
     }
 
     private func place(_ window: SurfaceWindow, size: NSSize) {
-        guard let item = statusItem.frameOnScreen, let bar = statusItem.menuBarBottom else { return }
+        guard let anchor = statusItem.surfaceAnchor else { return }
         let insets = SurfaceMetrics.shadowInsets
-        let screen = bar.screen.frame
-        let lowest = screen.minX + SurfaceMetrics.screenMargin
-        let highest = screen.maxX - SurfaceMetrics.screenMargin - SurfaceMetrics.width
-        let left = min(max(item.minX - SurfaceMetrics.leadingOffset, lowest), highest)
-        let top = bar.y - SurfaceMetrics.gapBelowMenuBar
-        let frame = NSRect(x: left - insets.leading, y: top + insets.top - size.height,
+        let frame = NSRect(x: anchor.left - insets.leading, y: anchor.top + insets.top - size.height,
                            width: size.width, height: size.height)
         if window.frame != frame { window.setFrame(frame, display: true) }
     }
