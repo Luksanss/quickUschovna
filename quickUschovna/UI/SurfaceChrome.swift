@@ -44,7 +44,7 @@ extension View {
 
     /// The shadow, the entrance and the shadow's room, around a `surfaceBody`.
     func surfaceWindow(entrance: SurfaceEntrance) -> some View {
-        modifier(SurfaceWindow(entrance: entrance))
+        modifier(SurfaceShell(entrance: entrance))
     }
 }
 
@@ -91,7 +91,7 @@ private struct SurfaceBody: ViewModifier {
     }
 }
 
-private struct SurfaceWindow: ViewModifier {
+private struct SurfaceShell: ViewModifier {
     let entrance: SurfaceEntrance
 
     @Environment(\.surfaceTokens) private var tokens
