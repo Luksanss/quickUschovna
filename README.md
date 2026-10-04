@@ -10,19 +10,42 @@ email, adding the files and waiting for the link. quickUschovna is a macOS menu-
 does it in one move: drag files onto its icon, and when the upload finishes the link is on your
 clipboard. You type your email once, in its settings.
 
-**Status: not built yet.** It's being designed. There's nothing to download.
-
 ## Install
 
 1. Download the `.dmg` from [the latest release](https://github.com/Luksanss/quickUschovna/releases/latest),
    open it, and drag quickUschovna onto Applications.
 2. Open it. The first time, macOS blocks it because it isn't notarized: go to System Settings →
    Privacy & Security and click Open Anyway.
+3. To send from Finder's right-click menu too, turn the Quick Action on once: right-click any file,
+   choose Quick Actions › Customize…, and tick Send with Úschovna. macOS adds other apps' Quick
+   Actions switched off.
 
 It needs macOS 27.
 
 quickUschovna doesn't check for updates itself. To update, download the latest release the same
 way and replace the app in Applications.
+
+## Use
+
+- **Drag files anywhere,** and a drop zone opens under the menu-bar icon. Drop them there, or on
+  the icon itself. The first time, it asks for your email address, the package's sender.
+- **Or in Finder,** select files and folders, right-click, and choose Quick Actions › Send with
+  Úschovna.
+- **When the upload finishes, the link is on your clipboard,** and a bubble under the icon says so.
+  Click the bubble to open the link.
+
+Everything in one drop goes as one package with one link. Folders are zipped first, without
+compression, so it's quick. Over 30 GB is refused before anything is sent. If the network drops,
+the upload waits and carries on where it stopped.
+
+Click the icon for what's sending, the links you sent in the last 14 days (click one to copy it
+again), your sender address, Launch at Login and Quit.
+
+## Build
+
+Open `quickUschovna.xcodeproj`, choose your own team under Signing & Capabilities for both targets
+(a free Personal Team works), and build the quickUschovna scheme. `scripts/uschovna/run-tests.sh`
+runs the Úschovna client against a local mock of its protocol, so it sends nothing.
 
 ## How it uses Úschovna
 
@@ -57,7 +80,9 @@ about:
 
 Your files go from your Mac straight to Úschovna, and nowhere else. Your email address is kept
 in the app's settings on your Mac and sent only to Úschovna, as the sender of each package, just
-as the website would send it. Úschovna emails the sender a control message for each package, and
+as the website would send it. **Anyone you give a link to sees that address**: Úschovna's
+download page says "<your address> vám posílá zásilku". Úschovna emails the sender a control
+message for each package, and
 [its privacy policy](https://www.uschovna.cz/Zasady%20zpracovani%20osobnich%20udaju%20Uschovna.pdf)
 says how it uses sender addresses, marketing included. quickUschovna itself has no analytics,
 crash reporting or telemetry.
