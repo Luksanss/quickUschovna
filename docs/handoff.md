@@ -43,20 +43,16 @@ ticket tracker; the next action below is the backlog.
 
 In this order; each step gates the next.
 
-1. **Optionally, ask Úschovna** (info@uschovna.cz) whether a personal client is fine or whether
+1. **Design in Claude Design** from `docs/design-brief-v1.md`: the menu-bar icon and its states,
+   the three ways in, the bubble, the panel, ten scenarios. The maintainer runs it and picks a
+   direction; then the brief's header records what was chosen, and a `docs/spec.md` describes
+   the app as it will be built.
+2. **Optionally, ask Úschovna** (info@uschovna.cz) whether a personal client is fine or whether
    there's an API. The maintainer sends it; an agent may draft it.
-2. **Pick the client approach** (Findings): a native client of the website's AJAX upload
-   (fast, small, grey) or the real page driven in a hidden `WKWebView` (more defensible, heavier,
-   breaks when their page changes). Either way, behind a small provider interface so an
-   official-API backend can replace Úschovna if it breaks or says no. The agent recommended the
-   native client on 2026-10-04; not yet decided.
-3. **Design in Claude Design.** The menu-bar drop target and its states (idle, drag-over,
-   uploading with progress, done with the link copied, error), and the one-time settings (sender
-   email). As minimal as betterTab.
-4. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
+3. **Implement on `dev`**: a plain Xcode menu-bar project like betterTab's, with the build as the
    first required check (Known gaps). The first real send needs the maintainer's go-ahead
    (Safety).
-5. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
+4. **Release pipeline**: CD modelled on betterTab's `.github/workflows/release.yml` and
    `docs/releasing.md` (a push to `main` builds, signs and publishes a GitHub Release, with
    Sparkle for updates). The maintainer creates the `release` environment (Selected branches:
    `main` only) and sets its secrets; agents never handle keys. What carries over from betterTab:
@@ -77,6 +73,16 @@ In this order; each step gates the next.
   Úschovna gives the sender, put on the clipboard. No recipients and no message, so Úschovna
   emails nobody but the sender's own control email. Sharing that link is how the maintainer
   already uses Úschovna, e.g. for files too big for Discord.
+- **A native client of Úschovna's website upload** (the maintainer, 2026-10-04), not the real
+  page driven in a hidden `WKWebView`: faster, smaller, and no worse at surviving their changes.
+  It sits behind a small provider interface, so an official-API backend can replace Úschovna if
+  it breaks or says no (Findings: Fallbacks).
+- **UI decisions for the design brief** (the maintainer, 2026-10-04): a bubble under the icon
+  confirms the copied link; recent links stay listed for as long as Úschovna keeps them; Claude
+  Design proposes all three ways in (the icon, a drop zone under it while dragging, Finder's Quick
+  Action). A keyboard shortcut was considered and dropped. Clicking the icon opens a panel in the
+  bubble's family rather than an `NSMenu`; the maintainer left that to whichever fits the main
+  design, and the agent picked the panel. UI copy is Czech.
 - **The repository is public from day one** (the maintainer, at setup). Everything committed is
   world-readable: no keys, tokens, certificates, personal addresses or Team IDs in the repo.
   Secrets live only in the GitHub `release` environment, which only `main` can use.
@@ -91,7 +97,7 @@ In this order; each step gates the next.
   the two diverge at every release.
 - **The README says only what the research supports:** unofficial, no API, uses the same upload
   as the website, can break without notice, personal low-volume use. Keep it that way as the
-  client approach is decided.
+  app takes shape.
 
 ## Findings worth keeping
 
@@ -154,7 +160,7 @@ terms, `robots.txt`, the endpoint names and the price list were checked twice.
   build (Debug and Release) becomes the required check: write the exact `xcodebuild` command into
   `CLAUDE.md` and `.claude/skills/handoff-update/SKILL.md` in that same commit, and add
   `Bash(xcodebuild *)` to that skill's `allowed-tools`.
-- **No CD and no `release` environment yet** (Next action 5).
+- **No CD and no `release` environment yet** (Next action 4).
 - **No licence.** betterTab has none either; it's the maintainer's call for a public repo.
 
 ## Safety constraints
