@@ -12,7 +12,10 @@ struct UploadFile: Sendable, Equatable {
 enum UploadEvent: Sendable, Equatable {
     /// Creating the package on Úschovna, or picking it up again; `sent` is where it resumes.
     case connecting(sent: Int64)
-    /// Bytes Úschovna has acknowledged so far, across all of the package's files.
+    /// Bytes sent so far across all of the package's files: those Úschovna has acknowledged plus
+    /// the chunk in flight, a few times a second. Never more than the total, and never lower than
+    /// the last report except right after `.connecting` or `.waitingForNetwork`, when a chunk is
+    /// sent again from the last acknowledged byte.
     case progress(sent: Int64)
     /// The network went away. The session waits for it and resumes from `sent` on its own.
     case waitingForNetwork(sent: Int64)
