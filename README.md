@@ -27,8 +27,9 @@ way and replace the app in Applications.
 
 ## Use
 
-- **Drag files anywhere,** and a drop zone opens under the menu-bar icon. Drop them there, or on
-  the icon itself. The first time, it asks for your email address, the package's sender.
+- **Drag files towards the menu-bar icon.** As the drag gets close, a drop zone opens under the
+  icon; drop them there, or on the icon itself. The first time, it asks for your email address,
+  the package's sender.
 - **Or in Finder,** select files and folders, right-click, and choose Quick Actions › Send with
   Úschovna.
 - **When the upload finishes, the link is on your clipboard,** and a bubble under the icon says so.

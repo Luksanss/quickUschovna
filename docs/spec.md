@@ -6,16 +6,25 @@ so and why. The brief it answered is `docs/design-brief-v1.md`.
 
 ## Ways in
 
-- **The drop zone.** Dragging files anywhere opens a 300 × 88 pt zone under the menu-bar icon. It
-  fades in over 120 ms, only for file drags (not text, not windows), and closes when the drag ends.
-  Over it, it reads "Release to send" in the accent colour; otherwise "Drop here to send", with
-  what's being dragged and its size, or "…, over the 30 GB limit" in orange.
+- **The icon** takes drops. A file drag over it (or over the zone) shows the open box on an accent
+  highlight.
+- **The drop zone.** A file drag that comes near the icon opens a 300 × 88 pt zone under it: within
+  80 pt of the zone's place, to its sides or below it, or in the menu bar above it, or on the icon
+  itself. A drag that starts in that area (moving one of the desktop's top-right icons) opens it
+  only after leaving the area and coming back, or on the icon. The zone stays until the drag ends,
+  so a drop that misses the icon still lands. It fades in over 120 ms, only for file drags (not
+  text, not windows). Over it, it reads "Release to send" in the accent colour; otherwise "Drop
+  here to send", with what's being dragged and its size, or "…, over the 30 GB limit" in orange.
+  - *Differs from the prototype:* the prototype opens the zone as soon as a file drag starts
+    anywhere. On a real desktop that meant every file drag, moving files around in Finder
+    included, opened it. Waiting for the icon itself was tried next, but the drag then ran into
+    the top of the screen, where with macOS's default settings a file drag opens Mission Control.
+    Opening near the icon lets the drop land below the menu bar. Both changed on 2026-10-04,
+    after v1.0.43.
   - *Differs from the prototype:* a drag that includes a folder shows its label without a size.
     Measuring a folder means listing it, and before the drop that would raise macOS's permission
     prompt for Desktop, Documents or Downloads in the middle of the drag. The drop grants access;
     the size is checked then.
-- **The icon** takes drops too. A file drag over it (or over the zone) shows the open box on an
-  accent highlight.
 - **Finder:** Quick Actions › Send with Úschovna on the selected files and folders does the same as a
   drop (`docs/quick-action.md`).
 

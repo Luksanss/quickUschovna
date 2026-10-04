@@ -1,9 +1,9 @@
 # quickUschovna
 
 A macOS menu-bar app for sending files through [uschovna.cz](https://www.uschovna.cz): drag files
-anywhere and drop them on the zone that opens under the menu-bar icon (or use Finder's Quick
-Actions › Send with Úschovna), and the share link lands on the clipboard, with the sender email set
-once. It's the maintainer's second menu-bar app after betterTab (`../betterTab`), and follows its
+towards the menu-bar icon and drop them on the zone that opens under it as the drag gets close (or
+use Finder's Quick Actions › Send with Úschovna), and the share link lands on the clipboard, with
+the sender email set once. It's the maintainer's second menu-bar app after betterTab (`../betterTab`), and follows its
 conventions.
 
 ## Start here
