@@ -30,6 +30,21 @@ final class SurfaceWindow: NSPanel {
 
     override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
+
+    /// The surface itself: the window minus the room around it for the shadow.
+    var surfaceFrame: NSRect {
+        let insets = SurfaceMetrics.shadowInsets
+        return NSRect(x: frame.minX + insets.leading, y: frame.minY + insets.bottom,
+                      width: frame.width - insets.leading - insets.trailing,
+                      height: frame.height - insets.top - insets.bottom)
+    }
+
+    /// The shadow is drawn by the view, so its faint pixels belong to the window and would catch
+    /// clicks, even over the menu bar and the icon. Only the surface itself takes the mouse.
+    func updateMouseHandling(at location: NSPoint = NSEvent.mouseLocation) {
+        let ignores = !surfaceFrame.contains(location)
+        if ignoresMouseEvents != ignores { ignoresMouseEvents = ignores }
+    }
 }
 
 /// An `NSHostingView` that tells its window when the SwiftUI content's size changes, so the window

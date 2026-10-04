@@ -14,6 +14,7 @@ final class SurfacePresenter {
     private let zoneDrop = FileDrop()
     private var clickMonitor: Any?
     private var keyMonitor: Any?
+    private var moveMonitors: [Any] = []
 
     init(model: AppModel, statusItem: StatusItemController) {
         self.model = model
@@ -60,6 +61,26 @@ final class SurfacePresenter {
         // click on the prototype's desktop does. Clicks in our own windows never get here.
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.model.clickedOutside() }
+        }
+        // Where the pointer is decides whether each surface's window takes the mouse
+        // (`SurfaceWindow.updateMouseHandling`). Over another app the global monitor sees the
+        // moves, over a surface the local one does; during a file drag only dragged events come.
+        let update: () -> Void = { [weak self] in
+            guard let self else { return }
+            for window in [self.zone.window, self.bubble.window, self.panel.window] where window.isVisible {
+                window.updateMouseHandling()
+            }
+        }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { _ in
+            MainActor.assumeIsolated { update() }
+        }) {
+            moveMonitors.append(monitor)
+        }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { event in
+            update()
+            return event
+        }) {
+            moveMonitors.append(monitor)
         }
         // Esc reaches us while the panel or the first-run bubble has the keyboard.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -115,5 +136,6 @@ final class Surface<Content: View> {
     private func resize() {
         guard let host else { return }
         place(window, host.fittingSize)
+        window.updateMouseHandling()
     }
 }

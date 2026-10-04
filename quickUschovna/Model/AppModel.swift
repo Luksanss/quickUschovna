@@ -20,8 +20,11 @@ final class AppModel {
     var isConfirmingQuit = false
     /// The sender's address, or "" before the first send.
     var senderEmail = ""
-    /// The text in whichever email field is open: the bubble's or the panel's.
-    var emailDraft = ""
+    /// The text in whichever email field is open: the bubble's or the panel's. Typing clears the
+    /// error, as in the prototype.
+    var emailDraft = "" {
+        didSet { if emailDraft != oldValue { emailError = nil } }
+    }
     /// "That doesn’t look like an email address.", under the field that's open.
     var emailError: String?
     var isEditingEmail = false

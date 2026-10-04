@@ -4,7 +4,9 @@ import AppKit
 /// files dropped on it are sent.
 final class StatusItemController {
     private let model: AppModel
-    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    /// A fixed width, the prototype's 32 pt item, so the icon's wider drag-over image (its accent
+    /// highlight) doesn't push the items beside it around.
+    private let item = NSStatusBar.system.statusItem(withLength: 32)
     private let drop = FileDrop()
 
     init(model: AppModel) {
