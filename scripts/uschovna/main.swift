@@ -40,8 +40,8 @@ enum Mock {
 
     /// Clears everything and sets the faults and settings for one scenario.
     static func reset(rules: [[String: Any]] = [], settings: [String: Any] = [:]) async throws {
-        let defaults: [String: Any] = ["slow_kbps": 0, "test_xss_fails": false, "no_upload_host": false, "link_style": "same",
-                                       "answers": [String: Any]()]
+        let defaults: [String: Any] = ["slow_kbps": 0, "test_xss_fails": false, "no_upload_host": false, "link_style": "public",
+                                       "finish_code_style": "secret", "answers": [String: Any]()]
         try await control(["reset": true, "rules": rules, "settings": defaults.merging(settings) { $1 }])
     }
 
@@ -203,8 +203,20 @@ func expectOrderly(_ log: EventLog, total: Int64) throws {
     try expect(log.progress.last == total, "the last progress is \(log.progress.last ?? -1), not \(total)")
 }
 
+/// The recipients' link the mock handed out last: `{site}/zasilka/{public}/`.
 func linkFromMock(_ state: MockState) -> URL? {
     (state.raw["links"] as? [String])?.last.flatMap(URL.init(string:))
+}
+
+/// The link is the recipients' page and carries none of the sender's secret.
+func expectPublic(_ link: URL, _ state: MockState, _ context: String = "") throws {
+    for package in state.packages {
+        if let secret = package["secret"] as? String {
+            try expect(!link.absoluteString.contains(secret), "\(context)the shared link carries the sender's secret: \(link)")
+        }
+    }
+    let shown = state.requests(to: "package_page")
+    try expect(shown.allSatisfy { $0["view"] as? String == "sender" }, "\(context)the package page opened wasn't the sender's: \(shown.map { $0["path"] ?? "" })")
 }
 
 // MARK: Scenarios
@@ -221,6 +233,8 @@ scenarios.append(("small file", {
     try await expectDelivered([file], state)
     try expectOrderly(log, total: 3000)
     try expect(link == linkFromMock(state), "returned \(link), the mock handed out \(String(describing: linkFromMock(state)))")
+    try expect(link.absoluteString.hasSuffix("/"), "the link doesn't end with a slash: \(link)")
+    try expectPublic(link, state)
     let order = state.requests.map { $0["endpoint"] as? String ?? "?" }
     try expect(order == ["page", "package_target", "test_xss", "create", "ajax_upload", "finish", "package_page"],
                "requests went \(order)")
@@ -540,17 +554,33 @@ scenarios.append(("test_xss fails: the site takes the upload", {
 }))
 
 scenarios.append(("the link the package page shows", {
-    for (style, expectShown) in [("canonical", true), ("anchor", true), ("foreign", false), ("unrelated", false), ("none", false)] {
+    // Whatever the sender's page shows, the shared link is the recipients' page, without the secret.
+    for (style, suffix) in [("public", ""), ("public-suffix", "sdilet"), ("anchor", ""), ("secret", ""),
+                            ("elsewhere", ""), ("foreign", ""), ("unrelated", ""), ("none", "")] {
         try await Mock.reset(settings: ["link_style": style])
         let file = try await makeRandomFile("link.txt", bytes: 10)
         let link = try await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog()).get()
-        let built = try require(linkFromMock(try await Mock.state()))
-        if expectShown {
-            try expect(link != built && link.absoluteString.hasPrefix(built.absoluteString), "\(style): got \(link)")
-        } else {
-            try expect(link == built, "\(style): got \(link), expected \(built)")
-        }
+        let state = try await Mock.state()
+        let recipients = try require(linkFromMock(state))
+        try expect(link.absoluteString == recipients.absoluteString + suffix, "\(style): got \(link), expected \(recipients)\(suffix)")
+        try expectPublic(link, state, "\(style): ")
     }
+}))
+
+scenarios.append(("a finish code without a secret", {
+    // The page this code opens may be the sender's. Its link is shared only if the page shows
+    // another one; otherwise nothing is.
+    try await Mock.reset(settings: ["finish_code_style": "plain", "link_style": "public"])
+    let file = try await makeRandomFile("plain.txt", bytes: 10)
+    let refused = await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog())
+    guard case .failure(UploadFailure.notAnswering(let detail)) = refused, detail.contains("sender") else {
+        throw Failure(description: "expected a refusal to share, got \(refused)")
+    }
+    try await Mock.reset(settings: ["finish_code_style": "plain", "link_style": "elsewhere"])
+    let link = try await run(service().makeSession(files: [file], sender: "name@example.com"), EventLog()).get()
+    let state = try await Mock.state()
+    let opened = try require(state.requests(to: "package_page").first?["path"] as? String)
+    try expect(!link.absoluteString.hasSuffix(opened) && !link.absoluteString.hasSuffix(opened + "/"), "shared the page it opened: \(link)")
 }))
 
 scenarios.append(("loose equality like JavaScript", {

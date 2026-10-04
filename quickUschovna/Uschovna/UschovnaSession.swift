@@ -223,20 +223,53 @@ final class UschovnaSession: UploadSession {
             throw error
         }
         reportProgress(force: true)
-        let built = client.packageLink(code: code)
-        // The page goes to the built link; the package page it opens shows its sender a link to
-        // share. That one wins when it plainly belongs to this package.
-        let shown = await client.packagePageLink(code: code)
-        let link: URL
-        if let shown, shown.absoluteString.contains(code) || shown.absoluteString.contains(finishing.code) {
-            link = shown
-        } else {
-            link = built
-        }
-        // Whether the two differ is what the first real upload has to settle, so that part is public.
-        let comparison = shown == nil ? "shows no package link" : shown == built ? "shows the same link" : "shows a different link"
-        uschovnaLog.info("Finished: the package page \(comparison, privacy: .public), and the \(link == built ? "built" : "shown", privacy: .public) one is shared; finish code \(code == finishing.code ? "matches" : "differs from", privacy: .public) the package code. Opened \(built.absoluteString, privacy: .private), shown \(shown?.absoluteString ?? "-", privacy: .private)")
+        let link = try await shareableLink(finishCode: code)
+        uschovnaLog.info("Finished; sharing \(link.absoluteString, privacy: .private)")
         return link
+    }
+
+    /// The link to share: the recipients' page, never the sender's.
+    ///
+    /// The finish code is `{public}/{secret}`, and the page the website goes to with it is the
+    /// sender's own, which can delete and extend the package. Its `package-link` element shows
+    /// the recipients' link, `{site}/zasilka/{public}/`. That's read as the browser would see it,
+    /// and used if it's that link (or starts with it) without the secret; otherwise the link is
+    /// built. The secret is never logged, not even as private data.
+    private func shareableLink(finishCode code: String) async throws(UploadTrouble) -> URL {
+        let (publicCode, secret) = UschovnaWire.splitFinishCode(code)
+        guard !publicCode.isEmpty else { throw .refused("Finishing answered a code with no public part") }
+        let page = client.pageAfterFinishing(code: code)
+        let shown = await client.packagePageLink(at: page)
+
+        guard let secret else {
+            // No secret in the code: the page it opens may well be the sender's, and nothing tells
+            // which link is safe, so only a different link the page shows is shared.
+            let differs = shown.map { Self.withoutTrailingSlash($0) != Self.withoutTrailingSlash(page) && $0.path().hasPrefix("/zasilka/") } ?? false
+            uschovnaLog.warning("The finish code has no secret part; the package page \(shown == nil ? "shows no link" : differs ? "shows another link, which is shared" : "shows its own link", privacy: .public)")
+            guard let shown, differs else {
+                throw .server("Finishing answered a code of an unexpected shape, and the package page shows no other link; not sharing one that may be the sender's", retry: false)
+            }
+            return shown
+        }
+
+        let built = client.publicLink(code: publicCode)
+        let accepted = shown.flatMap { shown -> URL? in
+            let text = shown.absoluteString
+            guard text.hasPrefix(built.absoluteString), !text.dropFirst(built.absoluteString.count).contains(secret) else { return nil }
+            return shown
+        }
+        // What the page showed decides nothing the user could regret, but it's what the next
+        // protocol change will show up in first, so it's said in public words.
+        let seen = shown == nil ? "shows no package link" : accepted == nil ? "shows a link that isn't the recipients'" : accepted == built ? "shows the recipients' link" : "shows a longer recipients' link"
+        let extendsPackageCode = package.map { publicCode.hasPrefix($0.code) } ?? false
+        uschovnaLog.info("The sender's package page \(seen, privacy: .public); the public code \(extendsPackageCode ? "starts with" : "doesn't start with", privacy: .public) the package code")
+        return accepted ?? built
+    }
+
+    private static func withoutTrailingSlash(_ url: URL) -> String {
+        var text = url.absoluteString
+        while text.hasSuffix("/") { text.removeLast() }
+        return text
     }
 
     // MARK: Retrying

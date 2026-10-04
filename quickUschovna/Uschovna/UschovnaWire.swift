@@ -201,6 +201,17 @@ nonisolated enum UschovnaWire {
         }
     }
 
+    /// The finish answer's code, `ABCDEFGH23456789-XYZ/QRSTUVWXYZ`: the package's public code, and
+    /// after the first slash the sender's secret. `/zasilka/{public}/` is the page recipients
+    /// download from; `/zasilka/{public}/{secret}`, where the website goes after sending, is the
+    /// sender's page that can delete and extend the package. The secret is nil when there's no
+    /// slash, or nothing after it.
+    static func splitFinishCode(_ code: String) -> (public: String, secret: String?) {
+        guard let slash = code.firstIndex(of: "/") else { return (code, nil) }
+        let secret = String(code[code.index(after: slash)...])
+        return (String(code[..<slash]), secret.isEmpty ? nil : secret)
+    }
+
     /// `"1.1.85"` from the send page's `uschovna.js?v1.1.85`.
     static func scriptVersion(inPage html: String) -> String? {
         guard let match = html.firstMatch(of: /uschovna\.js\?v([0-9][0-9.]*)/) else { return nil }

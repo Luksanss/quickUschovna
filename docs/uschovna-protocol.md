@@ -8,8 +8,9 @@ the script it loads, `https://www.uschovna.cz/www/js/uschovna.js?v1.1.85` (312,4
 `Last-Modified: Tue, 17 Mar 2026`). The bundle is minified; it was formatted with Prettier and the
 send flow traced by hand. Only public pages and the script were fetched with GET. Nothing was
 posted, no package was created, and no address was entered anywhere. Everything below about the
-server's answers comes from how the page's code reads them; the server itself hasn't been seen
-answering an upload. The **Open questions** section lists what only a real upload can settle.
+server's answers comes from how the page's code reads them, except what's marked **seen**: the
+first real upload (2026-10-04, one small file, made by the integrator with the maintainer's
+permission) settled some of it. The **Open questions** section lists what's still open.
 
 Úschovna has no API, and none of this is documented or promised by its operator. The page's
 minified names (`nm`, `tm`, `Rm`…) change with every build; the endpoint paths, fields and headers
@@ -25,8 +26,8 @@ are what matter.
 | 3 | `POST {host}/ajax/zalozeni_zasilky?{ms}` | upload host | Creates the package; returns its code. |
 | 4 | `POST {host}/ajax/ajax_upload/{ms}` | upload host | One chunk of one file, raw. Repeated until every file is in. |
 | 5 | `POST /ajax/still_alive?{ms}` | site | Once every 12 hours of uploading. |
-| 6 | `POST /ajax/zalozeni_zasilky?{ms}` with `dokoncit` | **site** | Finishes the package; returns the code for the link. |
-| 7 | `GET /zasilka/{code}` | site | The page goes here: the package page with its link. |
+| 6 | `POST /ajax/zalozeni_zasilky?{ms}` with `dokoncit` | **site** | Finishes the package; returns `{public}/{secret}`. |
+| 7 | `GET /zasilka/{public}/{secret}` | site | The page goes here: the sender's page, which shows the link to share, `/zasilka/{public}/`. |
 
 "Site" is the page's own origin, `https://www.uschovna.cz`. "Upload host" is whatever step 1
 names (or the site, when step 1 names nothing or step 2 fails). `{ms}` is `Date.now()`, a
@@ -186,30 +187,36 @@ asynchronously, and ignores the answer.
 When the last file's last chunk gets `res: 2`: `package_code={code}&dokoncit=true`, sent to the
 **site** with its `PHPSESSID`.
 
-Answer: JSON. If `status == 1` and `code` isn't 0, the page waits 3.5 s and goes to
-`/zasilka/{code}`, using the `code` **from this answer** (not necessarily the package code). Any
-other answer gets the "upload failed" alert; a failed request gets nothing (the page just waits).
-No retry.
+Answer: JSON. If `status` is loosely 1 and `code` isn't loosely 0, the page waits 3.5 s and goes
+to `/zasilka/{code}`, using the `code` **from this answer**. Any other answer gets the "upload
+failed" alert; a failed request gets nothing (the page just waits). No retry.
+
+**Seen:** that code isn't the package code from step 3. It's two codes joined by a slash,
+`{public}/{secret}`, shaped like `ABCDEFGH23456789-XYZ/QRSTUVWXYZ` (made up here; the real one had
+the same shape). The part before the slash names the package for recipients; the part after it
+is the **sender's secret**, which opens the page that can delete the package (step 7).
 
 If an ad video is playing (`nextbranding_is_video`), the page holds the redirect until the video
 ends. The finishing request itself goes out regardless.
 
 ## 7. The link
 
-The page's last step is `window.location.href = "/zasilka/" + code`, so the link is
-**`https://www.uschovna.cz/zasilka/{code}`**, built from the finish answer's `code`, with no
-trailing slash. It isn't in any answer as a URL. That's also the format the prior art printed as
-the share link (`tomas-binek/uschovna-bash-api`, with the old multipart form).
+The page's last step is `window.location.href = "/zasilka/" + code`, slash and all. No answer
+holds a link as a URL. **Seen** on the first real upload, there are two pages:
 
-The package page itself shows a link in an element the script calls `.l.data.package-link`
-(clicking it selects the text; on Premium packages a "copy link" button copies it). The sender
-view is marked `IS_SENDER_VIEW`, and has a delete button (`#button_smazat_zasilku`) and
-"downloads exhausted" handling that sends the sender to `…/premium`. What that element contains
-for a free package, and whether `/zasilka/{code}` opened elsewhere is the sender's view or a
-recipient's, can only be seen on a real package (Open questions).
+| URL | Page | What's on it |
+|---|---|---|
+| `https://www.uschovna.cz/zasilka/{public}/{secret}` | **The sender's page**: where the website goes after sending. | "vaše zásilka byla úspěšně odeslána", "SMAZAT ZÁSILKU" (`#button_smazat_zasilku`), "prodloužit" (extend). Its `.l.data.package-link` element holds `https://www.uschovna.cz/zasilka/{public}/`, followed by tabs. |
+| `https://www.uschovna.cz/zasilka/{public}/` | **The recipients' page**: the link to share. | "{sender} vám posílá zásilku" ("{sender} is sending you a package"), a download button, "staženo 0 x zbývá 30 stažení" (downloaded 0 times, 30 downloads left). No delete button. |
 
-The FAQ says each recipient gets a code of their own; with no recipients, the sender's link is
-the only one. `robots.txt` keeps crawlers off `/zasilka/`.
+So **the link to share is `https://www.uschovna.cz/zasilka/{public}/`**, with the trailing slash.
+The sender's URL must never be shared: anyone holding it can delete or extend the package. Sending
+the slash encoded (`/zasilka/{public}%2F{secret}`) gets Apache's "Not Found".
+
+The sender's page is the script's `IS_SENDER_VIEW`; its "downloads exhausted" handling sends the
+sender to `…/premium`. The FAQ says each recipient gets a code of their own; with no recipients,
+the public link is the only one to share. `robots.txt` keeps crawlers off `/zasilka/`. (The prior
+art printed `/zasilka/{id}` from the old multipart form, whose ids may have looked different.)
 
 ## Limits in the script
 
@@ -287,11 +294,15 @@ Where it deliberately differs:
 - **A fatal `res` (or `status` other than 1) ends the package.** Try Again then starts a new
   package from zero. If a package resumed from an earlier run is refused on its first chunk, the
   client starts a new one at once, in the same run (`.connecting(sent: 0)`).
-- **It reads the link the package page shows.** After finishing, it opens `/zasilka/{code}` as the
-  page's redirect would (with the session cookie) and looks for the `package-link` element. If
-  that holds a link on Úschovna's domain that contains the code, the client returns it; otherwise
-  it returns the built `https://www.uschovna.cz/zasilka/{code}`. The log says which, in public
-  words, with the links themselves private.
+- **It shares the recipients' link, never the sender's.** It splits the finish code at its first
+  slash, then opens the sender's page as the redirect would: slash unencoded, with the session
+  cookie. It reads that page's `package-link` and returns the link if three things hold: it's on
+  Úschovna's domain, it starts with `https://www.uschovna.cz/zasilka/{public}/`, and nothing after
+  that holds the secret. Otherwise it returns that built form. The secret is never logged, not
+  even as private data; the log says in public words what the page showed. A finish code with no
+  slash is refused unless the page shows a different link, because the client can't tell whether
+  the page such a code opens is the sender's: "Úschovna isn't answering" is better than sharing a
+  link that deletes the package.
 - **It refuses up front** what the page wouldn't send as a free package: nothing but empty files,
   more than 1000 files, or more than 30 GiB. A file that's missing or changed size since the drop
   is refused too.
@@ -324,48 +335,39 @@ timestamp. The harness fails a scenario on any of them.
 Faults can be set per scenario (`POST /__control`) or on the command line for trying the app by
 hand: `--drop-chunk N`, `--lose-response-chunk N`, `--stall-chunk N`, `--http500-chunk N`,
 `--fatal-chunk N`, `--slow-kbps K`, `--test-xss-fails`, `--no-upload-host`, `--link-style …`, and
+`--plain-finish-code` (a finish code with no secret), and
 `--answers real|bool|number|string` for how `status` and `res` are written (`real`, the default,
 answers `package_target` with `true` as the real server does).
 Run `scripts/uschovna/mock_server.py --help`, and point a debug build's `UschovnaService` at
 `http://127.0.0.1:8780`.
 
-## Open questions only a real upload can answer
+## What the first real upload settled, and what's still open
 
-The first real upload (one small file, no recipients, with the maintainer's permission) should
-settle these. Watch the log stream above, and the browser for the last two.
+**Settled** on 2026-10-04 (one small file, two chunks, finished):
+- The server takes the client as it is: the honest `User-Agent`, `Content-Type:
+  application/octet-stream` on chunks, composed file names.
+- `package_target` answers `"status": true`, a JSON boolean, and named the upload host
+  `www307.uschovna.cz`, where the package was created (so `test_xss` passed).
+- The finish code is `{public}/{secret}`, not the package code, and the link to share is the
+  recipients' page `https://www.uschovna.cz/zasilka/{public}/` (step 7). A free package's
+  recipients' page allows 30 downloads.
 
-1. **Does the server accept the client at all?** The honest `User-Agent`, `Content-Type:
-   application/octet-stream` on chunks, and composed file names. A refusal would show as
-   "…answered HTTP 4xx" or a `status`/`res` other than 1 in the log.
-2. **Which host does `package_target` name, and does `test_xss` pass?** The log line "Created
-   package on {host}" shows where the package went. If it's the site, `test_xss` failed or no host
-   was named; uploads still work, just through the site.
-3. **What do the answers really look like?** Is `code` a string, `usize` a number, `tmp` a string?
-   Does the first chunk's empty `X_TMP` work (the client sends the header with an empty value,
-   as the browser does)? Does `res: 2` come only with the file's last byte?
-4. **Is the finish answer's `code` the package code?** The log says "finish code matches / differs
-   from the package code".
-5. **The link.** The log says whether the package page "shows the same link", "a different link"
-   or "no package link", and which one was shared. Then, in a private browser window with no
-   Úschovna cookies, open the link the app copied and check:
-   - that it shows the package and lets you download it;
-   - **that it doesn't show the sender's controls** (the delete button, "Smazat zásilku"). If it
-     does, `/zasilka/{code}` is the sender's admin link, which must not be shared, and the client
-     has to return another one (whatever the package page or the sender's control email offers
-     recipients);
-   - whether it matches the link in the sender's control email.
-6. **The control email** arrives at the sender, in Czech (`language_to=cs`, the page's
-   language), with the default subject.
+**Still open.** The log doesn't show these, so they'd need a look at the raw answers or a deliberate
+fault:
 
-Settled only by luck or a deliberate fault, and not worth a second real upload:
-
-7. **A resent chunk after a lost answer.** If the server got a chunk but its answer was lost, the
+1. **The other answers' exact types.** Are create's and finish's `status`, and the chunks' `res`,
+   numbers or booleans? Is `usize` a number and `tmp` a string? The loose comparisons cover
+   booleans, numbers and numeric strings, so this is only curiosity, except for `usize`, which must
+   be a number or a string of digits.
+2. **The control email** reaches the sender in Czech (`language_to=cs`, the page's language), with
+   the default subject. Does it carry the recipients' link, the sender's, or both?
+3. **A resent chunk after a lost answer.** If the server got a chunk but its answer was lost, the
    client (like the page) sends it again from the old offset. Does the server overwrite from
    `X_USIZE`, or append (which would corrupt the file)? The page relies on the same behaviour, so
    it presumably overwrites. A lost answer to a file's **last** chunk is worse: the server has
    probably closed that `tmp` already and would refuse the resend, which ends the package and
    makes Try Again start over.
-8. **What a package that waited too long answers.** After hours offline, the upload host may have
+4. **What a package that waited too long answers.** After hours offline, the upload host may have
    dropped the partial file or the package. The client expects a `res` other than 1 or 2 then,
    which ends the package (or, right after a resume, starts a new one).
-9. **Whether `still_alive` matters**: it's only sent after 12 hours of uploading.
+5. **Whether `still_alive` matters**: it's only sent after 12 hours of uploading.

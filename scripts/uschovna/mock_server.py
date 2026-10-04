@@ -62,7 +62,10 @@ class State:
             "slow_kbps": 0,
             "test_xss_fails": False,
             "no_upload_host": False,
-            "link_style": "same",
+            "link_style": "public",
+            # "secret" answers finish with "{public}/{secret}" as the real server does; "plain"
+            # with a code that has no slash, to check the client won't share a link it can't vouch for.
+            "finish_code_style": "secret",
             # The values the mock answers with where the page compares loosely (`1 == e.status`).
             # The real package_target answers `"status": true`; the others haven't been seen.
             "answers": dict(DEFAULT_ANSWERS),
@@ -258,7 +261,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.role == "www" and path == "/poslat-zasilku":
             return self.send_page()
         if self.role == "www" and path.startswith("/zasilka/"):
-            return self.package_page(urllib.parse.unquote(path[len("/zasilka/"):]))
+            return self.package_page(path[len("/zasilka/"):])
         self.send(404, "not here", "text/plain")
 
     def do_POST(self):
@@ -377,7 +380,10 @@ class Handler(BaseHTTPRequestHandler):
         code = new_code()
         STATE.packages[code] = {
             "code": code,
-            "share_code": f"{new_code(10)}-{new_code(3)}",
+            # The real shape, e.g. ABCDEFGH23456789-XYZ/QRSTUVWXYZ: the recipients' code, then the
+            # sender's secret, which opens the page that can delete the package.
+            "public_code": f"{code}-{new_code(3)}",
+            "secret": new_code(10),
             "role": self.role,
             "sender": sender,
             "filenames": target["filenames"],
@@ -410,12 +416,15 @@ class Handler(BaseHTTPRequestHandler):
         if missing:
             STATE.error(f"finish: {len(missing)} file(s) not complete")
             return self.send_json({"status": 0})
+        plain = STATE.settings["finish_code_style"] == "plain"
+        finish_code = package["public_code"] if plain else f"{package['public_code']}/{package['secret']}"
         if not package["finished"]:
             package["finished"] = True
-            link = f"{STATE.www_origin}/zasilka/{package['share_code']}"
+            package["finish_code"] = finish_code
+            link = f"{STATE.www_origin}/zasilka/{package['public_code']}/"
             STATE.links.append(link)
-            print(f"share link: {link}", flush=True)
-        self.send_json({"status": answer("finish_status"), "code": package["share_code"]})
+            print(f"share link: {link}   (sender's page: {STATE.www_origin}/zasilka/{finish_code})", flush=True)
+        self.send_json({"status": answer("finish_status"), "code": package["finish_code"]})
 
     def still_alive(self, body):
         entry = self.record("still_alive")
@@ -426,32 +435,61 @@ class Handler(BaseHTTPRequestHandler):
         STATE.still_alive.append({"code": code, "time": time.time()})
         self.send_json({"status": 1})
 
-    def package_page(self, code):
+    def package_page(self, rest):
+        """/zasilka/{public}/{secret} is the sender's page, /zasilka/{public}/ the recipients'. A
+        code that has no secret (finish_code_style "plain") opens the sender's page either way."""
         with STATE.lock:
             entry = self.record("package_page")
             check_agent("package_page", entry)
             if entry["cookie"] not in STATE.sessions:
                 STATE.error("package_page: opened without the send page's PHPSESSID")
-            known = any(p["share_code"] == code for p in STATE.packages.values())
+            if "%2f" in rest.lower():
+                # Apache refuses an encoded slash in a path (AllowEncodedSlashes Off).
+                STATE.error("package_page: the slash in the code was sent encoded, which gets a 404")
+                return self.send(404, "<html><h1>Not Found</h1></html>", "text/html; charset=iso-8859-1")
+            parts = urllib.parse.unquote(rest).split("/")
+            plain = STATE.settings["finish_code_style"] == "plain"
+            package = next((p for p in STATE.packages.values() if p["public_code"] == parts[0]), None)
+            view = None
+            if package and len(parts) == 2 and parts[1] == package["secret"] and not plain:
+                view = "sender"
+            elif package and (parts[1:] in ([], [""])):
+                view = "sender" if plain else "recipient"
+            entry["view"] = view
             style = STATE.settings["link_style"]
-        if not known:
+        if view is None:
             return self.send(404, "<html>Zásilka nenalezena</html>", "text/html; charset=UTF-8")
+        public = f"{STATE.www_origin}/zasilka/{package['public_code']}/"
+        if view == "recipient":
+            page = (
+                "<!DOCTYPE html><html><body><div id=\"zasilka_wrapper\">"
+                f"<h1>{package['sender']} vám posílá zásilku</h1>"
+                f'<div class="soubor"><a class="iframe_download button_down" href="/download/x/1">stáhnout</a>'
+                '<span>staženo 0 x</span> <span>zbývá <span class="download-count-left">30</span> stažení</span></div>'
+                "</div></body></html>"
+            )
+            return self.send(200, page, "text/html; charset=UTF-8")
         link = {
-            "same": f"{STATE.www_origin}/zasilka/{code}",
-            "canonical": f"{STATE.www_origin}/zasilka/{code}/sdilet",
-            "anchor": f"{STATE.www_origin}/zasilka/{code}/odkaz",
-            "foreign": f"https://example.com/zasilka/{code}",
+            "public": public,
+            "public-suffix": public + "sdilet",
+            "anchor": public,
+            "secret": f"{STATE.www_origin}/zasilka/{package['public_code']}/{package['secret']}",
+            "elsewhere": f"{STATE.www_origin}/zasilka/{new_code()}-ABC/",
+            "foreign": f"https://example.com/zasilka/{package['public_code']}/",
             "unrelated": f"{STATE.www_origin}/uschovna_plus",
         }.get(style)
         if style == "anchor":
             element = f'<div class="l data package-link"><a href="{link}">{link}</a></div>'
         elif link:
-            element = f'<div class="l data package-link">\n  {link}\n</div>'
+            # The real page follows the link with tabs.
+            element = f'<div class="l data package-link">{link}\t\t\t\t</div>'
         else:
             element = ""
         page = (
             "<!DOCTYPE html><html><body><div id=\"zasilka_wrapper\">"
+            "<h1>vaše zásilka byla úspěšně odeslána</h1>"
             f"<div class=\"c\"><div class=\"l label\">odkaz</div>{element}</div>"
+            '<a id="button_smazat_zasilku" href="#">SMAZAT ZÁSILKU</a> <a href="#">prodloužit</a>'
             f'<a href="{STATE.www_origin}/cenik">ceník</a>'
             "</div></body></html>"
         )
@@ -648,9 +686,11 @@ def main():
     parser.add_argument("--fatal-chunk", type=int, help="answer res=0 to this chunk")
     parser.add_argument("--test-xss-fails", action="store_true", help="make test_xss fail, so the site is used")
     parser.add_argument("--no-upload-host", action="store_true", help="name no upload host in package_target")
-    parser.add_argument("--link-style", default="same",
-                        choices=["same", "canonical", "anchor", "foreign", "unrelated", "none"],
-                        help="what the package page shows as its package link")
+    parser.add_argument("--link-style", default="public",
+                        choices=["public", "public-suffix", "anchor", "secret", "elsewhere", "foreign", "unrelated", "none"],
+                        help="what the sender's package page shows as its package link (the real one: public)")
+    parser.add_argument("--plain-finish-code", action="store_true",
+                        help="answer finish with a code that has no '/secret' part")
     parser.add_argument("--answers", default="real", choices=sorted(ANSWER_STYLES),
                         help="how status and res values are written: as the real server was seen to "
                              "(package_target status true, the rest numbers), all booleans, all numbers, "
@@ -666,6 +706,7 @@ def main():
         "test_xss_fails": ARGS.test_xss_fails,
         "no_upload_host": ARGS.no_upload_host,
         "link_style": ARGS.link_style,
+        "finish_code_style": "plain" if ARGS.plain_finish_code else "secret",
         "answers": dict(DEFAULT_ANSWERS, **ANSWER_STYLES[ARGS.answers]),
     })
     rules = []

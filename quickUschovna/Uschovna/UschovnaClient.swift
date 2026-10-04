@@ -225,7 +225,8 @@ final class UschovnaClient {
     }
 
     /// `POST /ajax/zalozeni_zasilky` with `dokoncit`, on the site even when the files went to an
-    /// upload host. Returns the code the page then opens as `/zasilka/{code}`.
+    /// upload host. Returns the code the page then opens as `/zasilka/{code}`, which holds the
+    /// sender's secret (`UschovnaWire.splitFinishCode`): never log it, never share it.
     func finish(package: String) async throws(UploadTrouble) -> String {
         let fields = [("package_code", package), ("dokoncit", "true")]
         let object = try await json(ajax(site, "/ajax/zalozeni_zasilky", fields), step: "dokoncit")
@@ -236,17 +237,25 @@ final class UschovnaClient {
         return code
     }
 
-    /// The page's redirect target, `{site}/zasilka/{code}`.
-    func packageLink(code: String) -> URL {
+    /// The page recipients download from, `{site}/zasilka/{public code}/`, with the trailing slash
+    /// Úschovna's own links have.
+    func publicLink(code: String) -> URL {
         let segment = code.addingPercentEncoding(withAllowedCharacters: Self.pathSegmentAllowed) ?? code
-        return site.url("/zasilka/\(segment)")
+        return site.url("/zasilka/\(segment)/")
     }
 
-    /// Opens the package page, as the browser does after finishing, and returns the link it shows
-    /// its sender to share, if it shows one on Úschovna's own domain. Nil on any failure: the
-    /// built link is a good answer too.
-    func packagePageLink(code: String) async -> URL? {
-        var request = navigation(to: packageLink(code: code), from: pageURL)
+    /// Where the page goes after finishing: `{site}/zasilka/{code}` with the code's slash left a
+    /// slash, as `location.href = "/zasilka/" + code` leaves it. (An encoded `%2F` gets Apache's
+    /// 404.) With a secret in the code, this is the sender's page.
+    func pageAfterFinishing(code: String) -> URL {
+        let path = code.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code
+        return site.url("/zasilka/\(path)")
+    }
+
+    /// Opens a package page, as the browser does after finishing, and returns the link it shows in
+    /// its `package-link` element, if that's on Úschovna's own domain. Nil on any failure.
+    func packagePageLink(at url: URL) async -> URL? {
+        var request = navigation(to: url, from: pageURL)
         request.timeoutInterval = 20
         guard let (data, response) = try? await send(request, step: "Package page"),
               (200..<300).contains(response.statusCode),
