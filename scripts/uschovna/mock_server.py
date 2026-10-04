@@ -50,9 +50,14 @@ class State:
         }
         self.www_origin = ""
         self.upload_host = ""
+        # Bumped by every reset. A request remembers the generation it started in, so one that
+        # outlives a reset (a cancelled client's chunk still draining from the kernel's buffers)
+        # can't land in the next scenario's state.
+        self.generation = 0
         self.reset()
 
     def reset(self):
+        self.generation += 1
         self.sessions = set()
         self.targets = []
         self.packages = {}
@@ -434,6 +439,7 @@ class Handler(BaseHTTPRequestHandler):
     def ajax_upload(self, path):
         with STATE.lock:
             entry = self.record("ajax_upload")
+            generation = STATE.generation
             number = len(STATE.chunks) + 1
             fault = STATE.fault_for("ajax_upload")
         if not path[len("/ajax/ajax_upload/"):].isdigit():
@@ -452,9 +458,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.drop()
 
         body = self.read_body(slow=True)
-        if body is None:
-            with STATE.lock:
+        with STATE.lock:
+            stale = STATE.generation != generation
+            if body is None and not stale:
                 STATE.aborted.append({"chunk": number, "time": time.time()})
+        if stale:
+            print(f"  ignoring chunk {number}: it began before the last reset", file=sys.stderr, flush=True)
+            return self.drop()
+        if body is None:
             print(f"  client went away during chunk {number}", file=sys.stderr, flush=True)
             return self.drop()
 
@@ -471,6 +482,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"res": 0})
 
         with STATE.lock:
+            if STATE.generation != generation:
+                print(f"  ignoring chunk {number}: it began before the last reset", file=sys.stderr, flush=True)
+                return self.drop()
             self.check_browser_headers("ajax_upload", entry, jquery=False)
             answer = self.store_chunk(number, body)
         if kind == "lose_response":
