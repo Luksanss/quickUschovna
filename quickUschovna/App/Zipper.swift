@@ -34,13 +34,14 @@ enum Zipper {
         try? FileManager.default.removeItem(at: directory(for: packageID))
     }
 
-    /// Zips `folder` as "<name>.zip" with the folder itself at the top of the archive. `progress`
-    /// gets the bytes of file content written so far, a few times a second.
-    static func zip(folder: URL, packageID: UUID,
+    /// Zips `folder` into an archive called `name` ("<folder>.zip", or "<folder> 2.zip" when the
+    /// package has another folder of that name), with the folder itself at the top of the archive.
+    /// `progress` gets the bytes of file content written so far, a few times a second.
+    static func zip(folder: URL, as name: String, packageID: UUID,
                     progress: @escaping @MainActor (Int64) -> Void) async throws -> Archive {
         let directory = directory(for: packageID)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appending(path: folder.lastPathComponent + ".zip")
+        let destination = directory.appending(path: name)
         let size = try await write(folder: folder, to: destination, progress: progress)
         logger.info("Zipped a folder into \(size, privacy: .public) bytes")
         return Archive(url: destination, size: size)

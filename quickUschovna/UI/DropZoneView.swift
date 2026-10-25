@@ -2,20 +2,21 @@ import SwiftUI
 
 /// The drop zone that fades in under the icon once a file drag comes near it, until the drag ends
 /// (`model.isDropZoneOpen`), including its chrome and shadow room. 300 × 88 pt: a dashed target
-/// inside 6 pt of padding, which turns accent while the drag is over it.
+/// inside 6 pt of padding, which turns accent while the drag is over it. With ⌥ held, a drop adds
+/// to the collection instead of sending, and the zone says so.
 struct DropZoneView: View {
     let model: AppModel
 
     @Environment(\.surfaceTokens) private var tokens
 
     var body: some View {
-        let drag = model.drag ?? DragSummary(label: "", bytes: nil)
+        let drag = model.dropSummary ?? DragSummary(label: "", bytes: nil)
         let tint = drag.isOver ? tokens.accent : tokens.fg2
         VStack(spacing: 4) {
             // The prototype's glyph sits in a 25 pt line box: 22 pt of glyph on the text's baseline.
             MenuBarGlyph(state: drag.isOver ? .open : .idle, size: 22)
                 .frame(height: 25, alignment: .top)
-            Text(drag.isOver ? "Release to send" : "Drop here to send")
+            Text(Self.headline(for: drag))
                 .surfaceFont(13, .semibold)
             CappedLine(text: Self.subline(for: drag), maxWidth: 260)
                 .surfaceFont(11)
@@ -28,6 +29,16 @@ struct DropZoneView: View {
         .overlay { DashedBorder(color: drag.isOver ? tokens.accent : tokens.fg3) }
         .frame(height: SurfaceMetrics.dropZoneHeight - 12)
         .surfaceChrome(padding: EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6), entrance: .fade)
+    }
+
+    /// "Release to send", or with ⌥ held, "Release to add"; "Drop here to …" until it's over.
+    private static func headline(for drag: DragSummary) -> String {
+        switch (drag.isOver, drag.isAdding) {
+        case (true, false): "Release to send"
+        case (true, true): "Release to add"
+        case (false, false): "Drop here to send"
+        case (false, true): "Drop here to add"
+        }
     }
 
     /// "report.mov · 2.4 GB", or "45 GB, over the 30 GB limit", or just the label while folders

@@ -1,7 +1,7 @@
 import AppKit
 
 /// The menu-bar item: its icon follows `AppModel.iconState`, a click opens or closes the panel, and
-/// files dropped on it are sent.
+/// files dropped on it are sent, or collected with ⌥ held.
 final class StatusItemController {
     private let model: AppModel
     /// A fixed width, the prototype's 32 pt item, so the icon's wider drag-over image (its accent
@@ -17,7 +17,8 @@ final class StatusItemController {
         button.action = #selector(clicked)
         if let window = button.window {
             drop.onHover = { [weak model] over in model?.dragOverIcon(over) }
-            drop.onDrop = { [weak model] urls in model?.send(urls) }
+            drop.onAdding = { [weak model] adding in model?.dragAdding(adding) }
+            drop.onDrop = { [weak model] urls, adding in model?.drop(urls, adding: adding) }
             drop.attach(to: window)
         }
         observe { [weak self] in self?.update() }

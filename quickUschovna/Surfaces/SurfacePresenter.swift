@@ -26,7 +26,8 @@ final class SurfacePresenter {
         bubble.place = zone.place
         panel.place = zone.place
         zoneDrop.onHover = { [weak model] over in model?.drag?.isOver = over }
-        zoneDrop.onDrop = { [weak model] urls in model?.send(urls) }
+        zoneDrop.onAdding = { [weak model] adding in model?.dragAdding(adding) }
+        zoneDrop.onDrop = { [weak model] urls, adding in model?.drop(urls, adding: adding) }
         zoneDrop.attach(to: zone.window)
         installMonitors()
         observe { [weak self] in self?.update() }
@@ -34,7 +35,8 @@ final class SurfacePresenter {
 
     private func update() {
         let isPanelOpen = model.isPanelOpen
-        let showsBubble = model.bubble != nil && !isPanelOpen
+        // The zone opens where the bubble hangs, so it takes the bubble's place until the drag ends.
+        let showsBubble = (model.bubble != nil || model.isShowingCollected) && !isPanelOpen && !model.isDropZoneOpen
         // The first-run bubble has the email field, so it takes the keyboard.
         var bubbleTakesKeys = false
         if case .email = model.bubble { bubbleTakesKeys = true }

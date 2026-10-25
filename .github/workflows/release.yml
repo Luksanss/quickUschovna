@@ -111,6 +111,23 @@ jobs:
         if: steps.version.outputs.exists != 'true'
         run: scripts/make-release-notes.sh
 
+      # Check for Updates… reads the appcast; Sparkle installs only a disk image signed with this key.
+      - name: Sign the update and write the appcast
+        if: steps.version.outputs.exists != 'true'
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+        run: |
+          if [[ -z $SPARKLE_KEY ]]; then
+            echo "::error::The SPARKLE_ED_PRIVATE_KEY secret isn't set in the release environment (docs/releasing.md)."
+            exit 1
+          fi
+          # printf is a builtin and a pipe isn't a file, so the key stays off disk and out of ps.
+          printf '%s' "$SPARKLE_KEY" | scripts/make-appcast.sh
+
+      # gh uploads both files before the release goes live, so the latest release always has its appcast.
+
       - name: Publish the release
         if: steps.version.outputs.exists != 'true'
         env:
@@ -118,7 +135,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           dmg=build/release/quickUschovna-$VERSION.dmg
-          gh release create "v$VERSION" "$dmg" --title "quickUschovna $VERSION" \
+          gh release create "v$VERSION" "$dmg" build/release/appcast.xml --title "quickUschovna $VERSION" \
             --notes-file build/release/notes.md --target "$GITHUB_SHA"
           {
             echo "- Released [v$VERSION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION)."

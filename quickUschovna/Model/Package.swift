@@ -74,14 +74,25 @@ enum Bubble: Equatable {
 struct DragSummary: Equatable {
     /// As a package would be labelled: "report.mov", "Raw footage.zip", "4 files".
     var label: String
-    /// Total size, or nil while folders are still being measured.
+    /// Total size of what isn't collected yet, or nil while folders are still being measured.
     var bytes: Int64?
     /// The drag is over the drop zone (or the icon), so the zone shows "Release to send".
     var isOver = false
     /// The drag has come near the menu-bar icon or onto it, so the drop zone is open until it ends.
     var isZoneOpen = false
+    /// The items being dragged.
+    var items: [URL] = []
+    /// ⌥ is held, so a drop adds to the collection instead of sending: "Release to add".
+    var isAdding = false
 
     var isTooBig: Bool { (bytes ?? 0) > Limits.freePackageBytes }
+}
+
+/// An item an ⌥-drop set aside, waiting for Send or a drop without ⌥ (`AppModel.collected`).
+struct CollectedItem: Equatable {
+    let url: URL
+    /// Measured when it was added.
+    let bytes: Int64
 }
 
 /// What the menu-bar icon shows (`design/prototype/MenuBarIcon.dc.html`).

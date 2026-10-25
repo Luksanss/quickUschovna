@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5C00000000000000000000B1 /* QuickAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5C0000000000000000000002 /* QuickAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5C00000000000000000000B2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5C00000000000000000000B4 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +81,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C00000000000000000000B2 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +135,7 @@
 			);
 			name = quickUschovna;
 			packageProductDependencies = (
+				5C00000000000000000000B4 /* Sparkle */,
 			);
 			productName = quickUschovna;
 			productReference = 5C0000000000000000000001 /* quickUschovna.app */;
@@ -187,6 +190,9 @@
 			);
 			mainGroup = 5C0000000000000000000051;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5C00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5C0000000000000000000052 /* Products */;
 			projectDirPath = "";
@@ -516,6 +522,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5C00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5C00000000000000000000B4 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5C00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5C0000000000000000000081 /* Project object */;
 }
