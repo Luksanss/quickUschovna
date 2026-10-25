@@ -1,12 +1,14 @@
 # Handoff
 
-Written 2026-10-04 for release 3, as if `dev` has been merged into `main`: Check for Updates… in
-the panel, through Sparkle, and a README trimmed to what a user needs. Merged, it publishes
-**v1.0.52**, whose one note is "Check for updates from the panel". `/handoff` checks that against
-git. The maintainer hasn't tried the updater yet, and it can only be tried end to end across two
-releases that both have it (Next action). Release 2's handoff is archived at
-`docs/archive/handoffs/2026-10-04-release-2.md`; the one written while the drop zone was worked
-out at `docs/archive/handoffs/2026-10-04-drop-zone.md`; release 1's, with how v1 was built and
+Written 2026-10-25 for release 3, as if `dev` has been merged into `main`. The release carries Check
+for Updates… in the panel, through Sparkle; a README trimmed to what a user needs; and ⌥-drop
+collecting, so files from several folders go out as one link. Merged, it publishes **v1.0.54**,
+whose notes are the two `feat` subjects: "check for updates from the panel" and "hold ⌥ while
+dropping to send files from several folders as one link". `/handoff` checks that against git.
+Release 3 was first handed over on 2026-10-04 without ⌥-drop and held unmerged; that handoff is
+archived at `docs/archive/handoffs/2026-10-25.md`. Release 2's is at
+`docs/archive/handoffs/2026-10-04-release-2.md`, the one written while the drop zone was worked out
+at `docs/archive/handoffs/2026-10-04-drop-zone.md`, and release 1's, with how v1 was built and
 tested, at `docs/archive/handoffs/2026-10-04.md`.
 
 **The brief.** A macOS menu-bar app that makes sending a file through
@@ -32,16 +34,18 @@ ticket tracker; the next action below is the backlog.
 
 ## Working copy state
 
-- **`main`** should be release 3: `dev` merged with a merge commit, the 52nd commit, so
-  `v1.0.52`. Until the merge it's release 2, v1.0.47, published 2026-10-04 with its disk image and
-  its one note.
-- **`dev`** holds release 3 plus this handoff, pushed to `origin/dev`. Work continues on it.
+- **`main`** should be release 3: `dev` merged with a merge commit, the 54th commit, so
+  `v1.0.54`. Until the merge it's release 2, v1.0.47, published 2026-10-04.
+- **`dev`** holds release 3 plus this handoff, pushed to `origin/dev`. The pull request `dev` →
+  `main` is open for the maintainer to merge. Work continues on `dev`.
 - **The Sparkle key is set up.** The private key is in the login keychain under the account
   `quickUschovna` and in the `release` environment as `SPARKLE_ED_PRIVATE_KEY` (both 2026-10-04);
   the public half is `SUPublicEDKey` in `quickUschovna/Info.plist`. A copy belongs in the
   maintainer's password manager (`docs/releasing.md` § Updates).
-- **On the maintainer's Mac:** v1.0.43 is installed in `/Applications` and running; v1.0.47 isn't
-  installed. The Debug build with `--simulate` that the drop zone was tried with no longer runs.
+- **On the maintainer's Mac:** v1.0.43 is in `/Applications` but not running. What runs is the
+  Debug build in `build/DerivedData.noindex`, **without** `--simulate`, so with the real Úschovna
+  and the real settings: relaunched 2026-10-25 with ⌥-drop, after one that had run since
+  2026-10-13. A rebuild replaces that bundle on disk under the running app.
 - **Two copies of the Quick Action are registered** with PlugInKit: the installed one (1.0.43) and
   the one in `build/DerivedData.noindex`'s Release build (1.0), which every run of the required
   checks registers again. PlugInKit elects the installed one (`pluginkit -mvvv -i
@@ -50,14 +54,15 @@ ticket tracker; the next action below is the backlog.
 
 ## Next action
 
-1. **Check the release run** (Actions → Release): the tag `v1.0.52`, with both the disk image and
-   `appcast.xml` on the Releases page. The run now signs the image for Sparkle and fails if
+1. **Check the release run** (Actions → Release): the tag `v1.0.54`, with both the disk image and
+   `appcast.xml` on the Releases page. The run signs the image for Sparkle and fails if
    `SPARKLE_ED_PRIVATE_KEY` doesn't match `SUPublicEDKey`.
-2. **Install v1.0.52 by hand** over v1.0.43 (Open Anyway again). It's the first version with the
-   updater, so it can't arrive through it. Check that Finder's Send with Úschovna opens the
-   installed app, Launch at Login (never tried from an installed build), and that Check for
-   Updates… says "You're up to date!".
-3. **The first in-app update is release 4.** On v1.0.52, Check for Updates… should offer it,
+2. **Install v1.0.54 by hand** over v1.0.43 (Open Anyway again). It's the first version with the
+   updater, so it can't arrive through it. Quit the Debug build first, so the installed copy is
+   the one that runs. Check that Finder's Send with Úschovna opens the installed app, Launch at
+   Login (never tried from an installed build), that Check for Updates… says "You're up to
+   date!", and an ⌥-drop.
+3. **The first in-app update is release 4.** On v1.0.54, Check for Updates… should offer it,
    install it and relaunch. Watch for: Open Anyway asked again or not (Sparkle lifts the
    quarantine; untried on macOS 27); the sender, Recent, Launch at Login and the Quick Action
    surviving.
@@ -70,6 +75,27 @@ ticket tracker; the next action below is the backlog.
   link per drop. Folders zipped by our own stored writer. Release builds re-signed without
   `get-task-allow`. Formats follow the system locale. The reasons are in
   `docs/archive/handoffs/2026-10-04.md`.
+- **⌥-drop collects; every other way in sends at once** (the maintainer, 2026-10-25). Their screen
+  recording showed why: Finder's selection belongs to one window, so files Cmd-clicked in
+  Downloads and on the desktop can't be dragged together, and only one window's files arrived.
+  They asked for the upload to wait for confirmation only when ⌥ is held; a plain drop still sends
+  without asking. Settled with it (the agent's calls, which the maintainer tried and kept):
+  - **The collection rides along** with Send, a drop without ⌥, or the Quick Action, as one
+    package. Nothing can be added to an upload already running: Úschovna takes every file name
+    and the total size in its first request (`docs/uschovna-protocol.md` § 1).
+  - **"Ready to send" isn't a `Bubble` case.** `BubbleView` shows it whenever no other bubble is
+    out, so "Link copied" or "too big" covers it and it comes back after. A click elsewhere
+    doesn't close it, because collecting means clicking around in Finder.
+  - **The drop zone hides the bubble while it's open;** both hang from the same spot.
+  - **The collection lives in memory only,** until Send, Clear or quitting.
+  - **Turned down:** a short pause after each drop so a second one can join (it slows every send
+    and races window switching), and a basket with Send for every send (a step more each time).
+  - **Without code,** Finder's list view with folders expanded, or a search, does select across
+    folders; the app already sends such a selection as one package.
+- **Same-named items go up as "report.pdf" and "report 2.pdf"** (`UniqueNames`), compared without
+  case. Before, two folders of the same name were zipped to the same file in the package's
+  temporary directory, so the second overwrote the first; a cross-folder Finder selection could
+  already hit that.
 - **Check for Updates…, as betterTab has it** (the maintainer, 2026-10-04, after v1.0.47). This
   reverses v1's "no in-app updater". Sparkle 2.10.0 checks only when the row is chosen; the
   details are `docs/spec.md` § Updates and `docs/architecture.md` § Updates. Settled with it:
@@ -80,7 +106,8 @@ ticket tracker; the next action below is the backlog.
     app; separate keys mean a leak or a loss affects one app only. The maintainer chose that.
   - **Install and Relaunch waits while anything is queued** (`Updater`, Sparkle's
     postpone-relaunch delegate method), because quitting would cut off an upload. A failed
-    package counts too, until it's retried or cancelled.
+    package counts too, until it's retried or cancelled. A collection doesn't count: nothing is
+    uploading.
   - **Debug builds show the row, but it only beeps** (the agent's call). betterTab hides it in
     Debug; here the panel is reviewed in Debug builds and the design gallery, so it looks the
     same, and a dev build still never replaces itself with a release.
@@ -114,6 +141,15 @@ ticket tracker; the next action below is the backlog.
   - the finish code is `<public>/<secret>`, and only `https://www.uschovna.cz/zasilka/<public>/`
     may be shared, because the secret opens the sender's page with "SMAZAT ZÁSILKU";
   - the recipients' page shows the sender's address.
+- **Every running Debug build obeys `scripts/debug-control.swift`.** Its commands are a
+  distributed notification, so a `send` meant for a `--simulate` instance also reaches a Debug
+  build running without it, which uploads for real. Check `pgrep -fl quickUschovna.app` first.
+  On 2026-10-25 the maintainer's everyday app was such a build; it was idle, and was quit with
+  their consent before the simulated walkthrough.
+- **⌥ is read from `NSEvent.modifierFlags`,** which reports the keyboard whichever app has the
+  drag: at the drop (`FileDrop`), on each dragged event (`DragMonitor`) and on AppKit's
+  `draggingUpdated` over the icon or the zone. The maintainer tried ⌥-drop by hand on 2026-10-25
+  and it worked.
 - **The macOS findings** (zip tools, protected folders, the Quick Action arriving switched off,
   worktree builds registering copies of the extension, what the agent can capture but not click)
   are in `docs/archive/handoffs/2026-10-04.md`, § Findings.
@@ -123,9 +159,13 @@ ticket tracker; the next action below is the backlog.
   pointer reached the top edge. An app can't stop it, only keep the drop below the menu bar.
 - **A real drag can only be tried by hand.** The agent can't post mouse events, so the path a real
   drag takes (`DragMonitor`'s global monitors and the pointer's position, then `FileDrop` on the
-  status item's or the zone's window) is tried by the maintainer; they did on 2026-10-04.
-  `DebugControl` plays the model's side: `drag <path>`, `icon`, `unicon`, `over`, `out`,
-  `enddrag`, with `dump <file>` showing the zone's window.
+  status item's or the zone's window) is tried by the maintainer. `DebugControl` plays the model's
+  side: `drag <path>`, `option` / `unoption`, `icon`, `unicon`, `over`, `out`, `enddrag`, `collect
+  <path>`, `sendcollected`, `clearcollected`, with `dump <file>` showing the model and the windows.
+- **Testing the 30 GB limit takes no disk:** `mkfile -n 31g` makes a sparse file whose size
+  `FileMeasure` counts in full.
+- **zsh has a `log` builtin;** the app's log is `/usr/bin/log show --info --predicate 'subsystem ==
+  "com.luksanss.quickUschovna"'`.
 - **The client's checks are 25 scenarios** (`scripts/uschovna/Main.swift`, one
   `scenarios.append` each). Release 1's pull request said 26; that was a miscount.
 - **Sparkle's `generate_keys` without `--account` never makes a new key** when the keychain
@@ -149,12 +189,17 @@ ticket tracker; the next action below is the backlog.
 - **Nothing is notarized,** so first launch needs Open Anyway.
 - **The updater hasn't run end to end** (Next action 2–3). Install and Relaunch during a send can
   only be tried in a Release build, with a real upload, so ask first.
+- **⌥-drop hasn't gone through a real upload.** The stand-in run covered collecting, the merged
+  package, Send, Clear, the panel, the 30 GB refusal and the renamed archives; the maintainer's
+  hand test covered the ⌥ drag itself.
 - **Open protocol questions** (`docs/uschovna-protocol.md`, last section): a chunk sent again after
   a lost answer, above all a file's last chunk; whether `still_alive` matters.
 - **Rare failures get the generic message:** over 1000 items in one drop, or only empty files, ends
   in "Úschovna isn’t answering".
 - **A drag `DragMonitor` didn't notice opens no zone.** The icon still takes the drop. It notices a
   drag by the drag pasteboard's change count since mouse-down; no such miss has been seen.
+- **Drags that carry no file on disk open no zone:** a photo out of Photos, a Mail attachment, an
+  image from a browser. They hand over promised files or data, not file URLs. Untried.
 - **Focusing the panel's Sender field selects the whole address,** as macOS does; the prototype
   leaves it unselected.
 - **No unit-test target.** The model is exercised through `--simulate` and `DebugControl`, the
@@ -167,6 +212,8 @@ ticket tracker; the next action below is the backlog.
 - **A real upload is a real send** from the maintainer's address, with a control email. Of the
   five test uploads the maintainer approved on 2026-10-04, three were used; ask before any further
   real upload.
+- **Before scripting a Debug build, make sure it's the only one running** (Findings): another one
+  without `--simulate` would carry out the same commands for real.
 - **Be a polite client.** No bulk sending, no parallel hammering, no load tests against Úschovna.
 - **The sender email lives in the app's settings on the Mac, never in the repo.**
 - **Never log, store or share the part of a finish code after its slash.**
