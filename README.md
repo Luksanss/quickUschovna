@@ -21,6 +21,8 @@ hand, the same way as installing.
 
 - Drag files towards the menu-bar icon and drop them on the zone that opens under it, or in Finder,
   right-click → Quick Actions › Send with Úschovna.
+- Files from several folders: hold ⌥ as you drop to set them aside, then send them all as one link
+  with Send, or with your last drop made without ⌥.
 - The link lands on your clipboard. The first send asks for your email, the package's sender.
 - Click the icon for what's sending, your links from the last 14 days, and settings.
 

@@ -15,6 +15,8 @@ so and why. The brief it answered is `docs/design-brief-v1.md`.
   so a drop that misses the icon still lands. It fades in over 120 ms, only for file drags (not
   text, not windows). Over it, it reads "Release to send" in the accent colour; otherwise "Drop
   here to send", with what's being dragged and its size, or "…, over the 30 GB limit" in orange.
+  With ⌥ held it reads "Release to add" and "Drop here to add" instead. While something is
+  collected, the second line counts it too, so it always names what the drop would make.
   - *Differs from the prototype:* the prototype opens the zone as soon as a file drag starts
     anywhere. On a real desktop that meant every file drag, moving files around in Finder
     included, opened it. Waiting for the icon itself was tried next, but the drag then ran into
@@ -27,12 +29,24 @@ so and why. The brief it answered is `docs/design-brief-v1.md`.
     the size is checked then.
 - **Finder:** Quick Actions › Send with Úschovna on the selected files and folders does the same as a
   drop (`docs/quick-action.md`).
+- **Collecting, with ⌥.** A drop with ⌥ held, on the icon or the zone, doesn't send. It adds the
+  files to a collection that waits for the user, so files from several folders or Finder windows
+  can go out as one package. "Ready to send" shows it (§ The bubble, § The panel), with Send and
+  Clear. A file that's already collected isn't added twice. An ⌥-drop that would take the
+  collection over 30 GB is refused with the too-big bubble, and the collection stays as it was.
+  The collection lasts until it's sent or cleared, or the app quits.
+  - *Differs from the prototype,* which sends every drop at once. Added 2026-10-25 at the
+    maintainer's request: Finder's selection belongs to one window, so files from Downloads and
+    the desktop couldn't be dragged out together.
 
-Either way the upload starts at once; nothing asks to confirm.
+A drop without ⌥, and the Quick Action, start the upload at once, taking anything collected along
+in the same package; nothing asks to confirm. Send does the same for the collection alone.
 
 ## One drop, one link
 
-- However many items a drop holds, it's one package on Úschovna with one link.
+- However many items a drop (or a collection) holds, it's one package on Úschovna with one link.
+- Two items with the same name, from different folders, go out as Finder names a copy: the second
+  gets " 2" before its extension ("report 2.pdf"), the next " 3".
 - A folder is zipped first, as `<folder name>.zip` with the folder at its top, without compression
   (`quickUschovna/App/Zipper.swift`: UTF-8 names, ZIP64, `.DS_Store` left out).
 - A package's label is the file's name, the folder's name plus ".zip", or "N files".
@@ -49,14 +63,20 @@ Hangs from the icon, 300 pt wide. Only one at a time; a new one replaces the old
   Return saves it and sends; an invalid address shows "That doesn’t look like an email address."
 - **Too big:** "<size> is too big · Free packages are limited to 30 GB." Stays 5 s.
 - **Úschovna isn’t answering:** "<name> is waiting to be sent." with Try Again. Stays until dealt with.
+- **Ready to send:** what ⌥-drops have collected and its size, "Hold ⌥ as you drop to add more.",
+  then Send and Clear. It's out whenever something is collected and no other bubble is: another
+  bubble covers it while that one lasts, and it comes back after.
 
-A click in another app closes every bubble except "Link copied", which goes by itself. Esc closes the
-bubble that has the keyboard (the first-run one).
+A click in another app closes every bubble except "Link copied", which goes by itself, and "Ready to
+send", which lasts while the collection does. Esc closes the bubble that has the keyboard (the
+first-run one). While the drop zone is open, it takes the bubble's place.
 
 ## The panel
 
 A click on the icon opens it (the icon shades, like an open menu); another click, a click elsewhere,
 or Esc closes it. It replaces any bubble.
+- **Ready to send:** what's collected, with × to clear it, and its size with Send. Only while
+  something is collected.
 - **Sending:** the running package with a bar and its status ("Zipping “Raw footage”…",
   "Connecting to Úschovna…", "Resuming at 1.4 GB…", "1.4 GB of 2.4 GB · 3 min left",
   "Reconnecting… 1.4 GB of 2.4 GB sent", "Úschovna isn’t answering" with Try Again), the queued

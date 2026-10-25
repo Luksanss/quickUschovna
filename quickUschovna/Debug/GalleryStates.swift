@@ -27,6 +27,16 @@ struct GalleryState {
         GalleryState(name: "zone-files", surface: .dropZone) { $0.drag = DragSummary(label: "3 files", bytes: 2_103_312_000) },
         GalleryState(name: "zone-long", surface: .dropZone) { $0.drag = DragSummary(label: Sample.longName, bytes: 3_200_000_000) },
         GalleryState(name: "zone-measuring", surface: .dropZone) { $0.drag = DragSummary(label: "Raw footage.zip", bytes: nil) },
+        GalleryState(name: "zone-adding", surface: .dropZone) {
+            $0.drag = DragSummary(label: "report.mov", bytes: 2_400_000_000, isAdding: true)
+        },
+        GalleryState(name: "zone-adding-over", surface: .dropZone) {
+            $0.drag = DragSummary(label: "report.mov", bytes: 2_400_000_000, isOver: true, isAdding: true)
+        },
+        GalleryState(name: "zone-with-collected", surface: .dropZone) {
+            $0.collected = Sample.collected
+            $0.drag = DragSummary(label: "report.mov", bytes: 2_400_000_000, isOver: true, items: [Sample.file("report.mov")])
+        },
     ]
 
     // MARK: Bubble
@@ -55,6 +65,10 @@ struct GalleryState {
         GalleryState(name: "bubble-toobig", surface: .bubble) { $0.bubble = .tooBig(bytes: 45_000_000_000) },
         GalleryState(name: "bubble-error", surface: .bubble) { $0.bubble = .failed(label: "report.mov", packageID: Sample.id(1)) },
         GalleryState(name: "bubble-error-long", surface: .bubble) { $0.bubble = .failed(label: Sample.longName, packageID: Sample.id(1)) },
+        GalleryState(name: "bubble-collected", surface: .bubble) { $0.collected = Sample.collected },
+        GalleryState(name: "bubble-collected-long", surface: .bubble) {
+            $0.collected = [CollectedItem(url: Sample.file(Sample.longName), bytes: 3_200_000_000)]
+        },
     ]
 
     // MARK: Panel
@@ -111,6 +125,11 @@ struct GalleryState {
             Sample.panel($0, history: Sample.fiveLinks + [Sample.link(6, "storyboard-final.key", 96_000_000, days: 1),
                                                          Sample.link(7, "interview-raw.mov", 3_800_000_000, days: 1)])
         },
+        GalleryState(name: "panel-collected", surface: .panel) {
+            Sample.panel($0)
+            $0.collected = Sample.collected
+            $0.queue = [Sample.package(1, "report.mov", 2_400_000_000, sent: 900_000_000, .uploading)]
+        },
         GalleryState(name: "panel-editing", surface: .panel) {
             Sample.panel($0)
             $0.isEditingEmail = true
@@ -147,6 +166,15 @@ enum Sample {
     static let badEmail = "That doesn’t look like an email address."
     static let longName = "Final_Final_v7_Prezentace_pro_klienta_Q4_2026_schvalena_verze_OPRAVDU_posledni.mov"
     static let link = URL(string: "https://www.uschovna.cz/zasilka/ABCDEFGHJKLMNPQR-STU/")!
+
+    /// A file of the sample's, which needn't exist.
+    static func file(_ name: String) -> URL {
+        URL(fileURLWithPath: "/Users/jana/Downloads").appending(path: name)
+    }
+
+    /// Two files collected with ⌥.
+    static let collected = [CollectedItem(url: file("site-plans.pdf"), bytes: 48_000_000),
+                            CollectedItem(url: file("mix-master-v3.wav"), bytes: 212_000_000)]
 
     /// Midnight, `days` from today: how the prototype dates its links.
     static func day(_ days: Int) -> Date {

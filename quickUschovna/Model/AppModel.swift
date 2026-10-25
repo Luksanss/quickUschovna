@@ -31,6 +31,8 @@ final class AppModel {
     var launchAtLogin = false
     /// The Recent row showing "✓ Link copied" for a moment.
     var copiedRecordID: UUID?
+    /// What ⌥-drops have set aside, oldest first, until Send or a drop without ⌥ sends it along.
+    var collected: [CollectedItem] = []
     /// A file drag in progress anywhere on screen (`DragMonitor`).
     var drag: DragSummary?
     /// A file drag is over the menu-bar icon itself.
@@ -48,6 +50,18 @@ final class AppModel {
     /// desktop got in the way of ordinary drags in Finder. Waiting for the icon itself made the drag
     /// run into the top of the screen, which macOS takes as a request for Mission Control.
     var isDropZoneOpen: Bool { drag?.isZoneOpen == true }
+
+    var collectedBytes: Int64 { collected.reduce(0) { $0 + $1.bytes } }
+    /// "Ready to send" is in the bubble when something is collected and no other bubble is out.
+    var isShowingCollected: Bool { bubble == nil && !collected.isEmpty }
+
+    /// What the drop zone names: what a drop now would make, counting what's already collected.
+    var dropSummary: DragSummary? {
+        guard var summary = drag, !collected.isEmpty else { return drag }
+        summary.label = Format.packageLabel(for: withCollected(summary.items))
+        summary.bytes = summary.bytes.map { $0 + collectedBytes }
+        return summary
+    }
 
     var iconState: MenuBarIconState {
         if isDragOverIcon || drag?.isOver == true { return .target }
@@ -111,21 +125,80 @@ final class AppModel {
 
     // MARK: Sending
 
-    /// Sends what was dropped (or picked in Finder) as one package.
+    /// A drop on the icon or the zone: with ⌥ held it's collected, otherwise sent.
+    func drop(_ urls: [URL], adding: Bool) {
+        if adding { collect(urls) } else { send(urls) }
+    }
+
+    /// Sends what was dropped (or picked in Finder) as one package, together with anything
+    /// collected.
     func send(_ urls: [URL]) {
-        let items = urls.filter(\.isFileURL)
+        let items = withCollected(urls.filter(\.isFileURL))
         guard !items.isEmpty else { return }
-        // As the prototype's `send`: a drop closes everything else that's open.
+        closeForDrop()
+        Task {
+            let bytes = await FileMeasure.totalSize(of: items)
+            self.enqueue(items, bytes: bytes)
+        }
+    }
+
+    /// Send, in "Ready to send": the collection goes out as one package.
+    func sendCollected() {
+        send([])
+    }
+
+    /// An ⌥-drop: sets the items aside until Send or a drop without ⌥, so files from several
+    /// folders can go out as one package.
+    func collect(_ urls: [URL]) {
+        let items = uncollected(urls.filter(\.isFileURL))
+        guard !items.isEmpty else { return }
+        closeForDrop()
+        Task {
+            var added: [CollectedItem] = []
+            for item in items {
+                added.append(CollectedItem(url: item, bytes: await FileMeasure.totalSize(of: [item])))
+            }
+            let total = self.collectedBytes + added.reduce(0) { $0 + $1.bytes }
+            if total > Limits.freePackageBytes {
+                self.logger.info("Refused to collect \(added.count, privacy: .public) items: \(total, privacy: .public) bytes is over the limit")
+                self.showBubble(.tooBig(bytes: total), for: Self.tooBigBubbleDuration)
+                return
+            }
+            if case .tooBig = self.bubble { self.hideBubble() }
+            self.collected += added
+            self.logger.info("Collected \(added.count, privacy: .public) items, \(self.collected.count, privacy: .public) in all")
+        }
+    }
+
+    /// Clear, in "Ready to send": forgets the collection. The files themselves are untouched.
+    func clearCollected() {
+        collected = []
+    }
+
+    /// Of `urls`, those not collected yet, each once.
+    func uncollected(_ urls: [URL]) -> [URL] {
+        var seen = Set(collected.map { Self.identity(of: $0.url) })
+        return urls.filter { seen.insert(Self.identity(of: $0)).inserted }
+    }
+
+    /// The collection, then those of `urls` not in it: what a drop without ⌥ sends.
+    private func withCollected(_ urls: [URL]) -> [URL] {
+        collected.map(\.url) + uncollected(urls)
+    }
+
+    /// The same file however its URL was spelled (a folder's may end in a slash).
+    private static func identity(of url: URL) -> String {
+        url.standardizedFileURL.path
+    }
+
+    /// As the prototype's `send`: a drop closes everything else that's open.
+    private func closeForDrop() {
         drag = nil
         isDragOverIcon = false
         isPanelOpen = false
         isConfirmingQuit = false
         isEditingEmail = false
         isBubbleHovered = false
-        Task {
-            let bytes = await FileMeasure.totalSize(of: items)
-            self.enqueue(items, bytes: bytes)
-        }
     }
 
     private func enqueue(_ items: [URL], bytes: Int64) {
@@ -153,6 +226,8 @@ final class AppModel {
         var package = UploadPackage(id: UUID(), label: label, items: items, bytes: bytes)
         package.zipName = folders.count == 1 ? folders[0].lastPathComponent : "\(folders.count) folders"
         queue.append(package)
+        let sent = Set(items.map(Self.identity(of:)))
+        collected.removeAll { sent.contains(Self.identity(of: $0.url)) }
         logger.info("Queued a package of \(items.count, privacy: .public) items, \(bytes, privacy: .public) bytes")
         updateActivity()
         startNext()
@@ -207,19 +282,21 @@ final class AppModel {
             }
         }
         var files: [UploadFile] = []
+        var names = UniqueNames()
         var zippedSoFar: Int64 = 0
         for item in package.items {
             try Task.checkCancellation()
             if FileMeasure.isDirectory(item) {
                 let base = zippedSoFar
-                let zip = try await Zipper.zip(folder: item, packageID: id) { [weak self] done in
+                let name = names.claim(item.lastPathComponent + ".zip")
+                let zip = try await Zipper.zip(folder: item, as: name, packageID: id) { [weak self] done in
                     self?.update(id) { $0.zipDone = min($0.zipTotal, base + done) }
                 }
                 zippedSoFar += await FileMeasure.totalSize(of: [item])
-                files.append(UploadFile(url: zip.url, name: item.lastPathComponent + ".zip", size: zip.size))
+                files.append(UploadFile(url: zip.url, name: name, size: zip.size))
             } else {
                 let size = await FileMeasure.totalSize(of: [item])
-                files.append(UploadFile(url: item, name: item.lastPathComponent, size: size))
+                files.append(UploadFile(url: item, name: names.claim(item.lastPathComponent), size: size))
             }
         }
         preparedFiles[id] = files
@@ -510,6 +587,11 @@ final class AppModel {
     func dragOverIcon(_ over: Bool) {
         isDragOverIcon = over
         if over { drag?.isZoneOpen = true }
+    }
+
+    /// ⌥ went down (true) or up (false) during a file drag.
+    func dragAdding(_ adding: Bool) {
+        if let drag, drag.isAdding != adding { self.drag?.isAdding = adding }
     }
 
     // MARK: Dismissal, from the surfaces

@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The panel that opens on a click on the icon, including its chrome and shadow room. Top to
-/// bottom: what's sending, the links in Recent, then the sender address, Launch at Login, Check for
-/// Updates… and Quit.
+/// bottom: what's collected, what's sending, the links in Recent, then the sender address, Launch
+/// at Login, Check for Updates… and Quit.
 struct PanelView: View {
     let model: AppModel
 
@@ -10,6 +10,12 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if !model.collected.isEmpty {
+                SectionHeader(title: "Ready to send")
+                CollectedRow(label: Format.packageLabel(for: model.collected.map(\.url)), bytes: model.collectedBytes,
+                             send: model.sendCollected, clear: model.clearCollected)
+                SurfaceSeparator()
+            }
             if !model.queue.isEmpty {
                 SectionHeader(title: "Sending")
                 ForEach(Array(model.queue.enumerated()), id: \.element.id) { index, package in
@@ -93,6 +99,44 @@ private struct HoverRow<Content: View>: View {
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .onTapGesture(perform: action)
+    }
+}
+
+// MARK: - Ready to send
+
+/// What ⌥-drops have collected: its name and × to clear it, then its size and Send, laid out as a
+/// failed package's row with its Try Again.
+private struct CollectedRow: View {
+    let label: String
+    let bytes: Int64
+    let send: () -> Void
+    let clear: () -> Void
+
+    @Environment(\.surfaceTokens) private var tokens
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                SplitName(name: label)
+                    .surfaceFont(13, .medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(label)
+                CancelButton(help: "Clear", action: clear)
+            }
+            HStack(spacing: 8) {
+                Text(Format.size(bytes))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(tokens.fg2)
+                Button(action: send) {
+                    Text("Send")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(tokens.accent)
+                }
+                .buttonStyle(BareButtonStyle())
+            }
+            .surfaceFont(11)
+        }
+        .padding(EdgeInsets(top: 6, leading: 10, bottom: 7, trailing: 10))
     }
 }
 
@@ -211,8 +255,9 @@ private struct ProgressBar: View {
     }
 }
 
-/// The 18 pt round × on a package's row.
+/// The 18 pt round × on a package's row, and on what's collected.
 private struct CancelButton: View {
+    var help: LocalizedStringKey = "Cancel"
     let action: () -> Void
 
     @Environment(\.surfaceTokens) private var tokens
@@ -231,7 +276,7 @@ private struct CancelButton: View {
         }
         .buttonStyle(BareButtonStyle())
         .onHover { isHovered = $0 }
-        .help("Cancel")
+        .help(help)
     }
 }
 

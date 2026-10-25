@@ -8,6 +8,28 @@ struct UploadFile: Sendable, Equatable {
     let size: Int64
 }
 
+/// Hands out the names a package's files go up under, so two items of the same name from
+/// different folders stay apart: "report.pdf", then "report 2.pdf", "report 3.pdf", as Finder names
+/// a copy. Case doesn't tell names apart, as on the recipients' disks.
+struct UniqueNames {
+    private var taken: Set<String> = []
+
+    mutating func claim(_ name: String) -> String {
+        var base = Substring(name), suffix = Substring("")
+        if let dot = name.lastIndex(of: "."), dot != name.startIndex {
+            base = name[..<dot]
+            suffix = name[dot...]
+        }
+        var candidate = name
+        var number = 2
+        while !taken.insert(candidate.lowercased()).inserted {
+            candidate = "\(base) \(number)\(suffix)"
+            number += 1
+        }
+        return candidate
+    }
+}
+
 /// What a running upload reports to the queue, on the main actor.
 enum UploadEvent: Sendable, Equatable {
     /// Creating the package on Úschovna, or picking it up again; `sent` is where it resumes.

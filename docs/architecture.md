@@ -73,6 +73,15 @@ surface and icon state to PNGs and quits; add `-AppleLocale en_US` for the proto
 - **`AppModel.send`** measures the items (`FileMeasure`, off the main actor), refuses over 30 GB,
   asks for the sender first if there's none, and queues one `UploadPackage`. The first package in
   the queue is worked on by one task at a time.
+- **⌥-drops** (added 2026-10-25) go to `AppModel.collect` instead: `FileDrop` reads ⌥ from
+  `NSEvent.modifierFlags` at the drop, which works while another app has the drag. The items wait
+  in `AppModel.collected`, each measured once, and `send` puts them in front of whatever it's
+  given, so a drop without ⌥, the Quick Action and Send all take them along. "Ready to send" isn't
+  a `Bubble` case: `BubbleView` shows it when no other bubble is out, so it comes back after one.
+  While a drag is on, `DragMonitor` and `FileDrop` keep `DragSummary.isAdding` up to date, and the
+  zone names `AppModel.dropSummary`, the drag plus the collection.
+- **File names** go up through `UniqueNames`: two items of the same name, possible once a package
+  can come from several folders, become "report.pdf" and "report 2.pdf", archives included.
 - **`Zipper`** writes folders into stored (uncompressed) ZIP archives itself, with UTF-8-flagged
   NFC names, ZIP64 and zlib's CRC32, because neither Apple's `zip` nor `ditto` produces archives
   that arrive intact everywhere (`docs/handoff.md` § Findings). Archives live in the temporary

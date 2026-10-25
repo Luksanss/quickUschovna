@@ -6,7 +6,9 @@ import os
 /// notification `com.luksanss.quickUschovna.debug` with the command as its object and the
 /// arguments under `args` in its user info. `scripts/debug-control.swift` posts them.
 ///
-/// Commands: `send <path>…` (as a drop), `drag <path>…` (a file drag starts), `icon` / `unicon`
+/// Commands: `send <path>…` (as a drop), `collect <path>…` (as a drop with ⌥ held), `sendcollected`
+/// / `clearcollected` (Send / Clear in "Ready to send"), `drag <path>…` (a file drag starts),
+/// `option` / `unoption` (⌥ goes down / up during the drag), `icon` / `unicon`
 /// (the drag comes over the menu-bar icon, which opens the drop zone / leaves it), `over` / `out`
 /// (the drag moves over the drop zone / off it), `enddrag`, `panel` (a click on the icon),
 /// `outside` (a click in another app), `escape`, `email <address>` (typed into whichever email
@@ -35,11 +37,17 @@ final class DebugControl {
         let urls = args.map { URL(fileURLWithPath: $0) }
         switch command {
         case "send": model.send(urls)
-        case "drag": model.drag = DragSummary(label: Format.packageLabel(for: urls), bytes: nil)
+        case "collect": model.collect(urls)
+        case "sendcollected": model.sendCollected()
+        case "clearcollected": model.clearCollected()
+        case "drag": model.drag = DragSummary(label: Format.packageLabel(for: urls), bytes: nil, items: urls)
+            let fresh = model.uncollected(urls)
             Task {
-                let bytes = await FileMeasure.totalSize(of: urls)
+                let bytes = await FileMeasure.totalSize(of: fresh)
                 self.model.drag?.bytes = bytes
             }
+        case "option": model.dragAdding(true)
+        case "unoption": model.dragAdding(false)
         case "over": model.drag?.isOver = true
         case "out": model.drag?.isOver = false
         case "icon": model.dragOverIcon(true)
@@ -73,6 +81,8 @@ final class DebugControl {
             "panel: \(model.isPanelOpen) confirmingQuit: \(model.isConfirmingQuit) editingEmail: \(model.isEditingEmail)",
             "bubble: \(model.bubble.map { String(describing: $0) } ?? "none") hovered: \(model.isBubbleHovered)",
             "drag: \(model.drag.map { String(describing: $0) } ?? "none") overIcon: \(model.isDragOverIcon)",
+            "zone says: \(model.dropSummary.map { "\($0.label) \($0.bytes.map(String.init) ?? "-")" } ?? "none")",
+            "collected: \(model.collected.count) items, \(model.collectedBytes) bytes, shown: \(model.isShowingCollected)",
             "sender set: \(!model.senderEmail.isEmpty) emailError: \(model.emailError ?? "none")",
             "unseenError: \(model.hasUnseenError) copiedRow: \(model.copiedRecordID != nil)",
         ]

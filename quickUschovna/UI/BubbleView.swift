@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The bubble under the icon (`model.bubble`), including its chrome and shadow room: a 28 pt badge
-/// and up to three lines, in one of four versions. A click anywhere on it goes to
-/// `model.bubbleClicked()`, except on Try Again and in the email field.
+/// The bubble under the icon (`model.bubble`, or else "Ready to send" while something is
+/// collected), including its chrome and shadow room: a 28 pt badge and up to three lines, in one of
+/// five versions. A click anywhere on it goes to `model.bubbleClicked()`, except on its buttons and
+/// in the email field.
 struct BubbleView: View {
     let model: AppModel
 
@@ -26,7 +27,9 @@ struct BubbleView: View {
         case .failed(let label, _):
             FailedBubble(label: label, retry: model.retry)
         case nil:
-            EmptyView()
+            if !model.collected.isEmpty {
+                CollectedBubble(model: model)
+            }
         }
     }
 }
@@ -141,6 +144,41 @@ private struct TooBigBubble: View {
             Text("Free packages are limited to \(Format.size(Limits.freePackageBytes)).")
                 .surfaceFont(12)
                 .foregroundStyle(tokens.fg2)
+        }
+    }
+}
+
+/// What ⌥-drops have collected, waiting for Send (or a drop without ⌥) or Clear. The badge is the
+/// open box, as in the drop zone while a drag is over it.
+private struct CollectedBubble: View {
+    let model: AppModel
+
+    @Environment(\.surfaceTokens) private var tokens
+
+    var body: some View {
+        let items = model.collected.map(\.url)
+        BubbleLayout {
+            BubbleBadge(color: tokens.fill) {
+                // As the first-run badge's glyph, a point above the middle.
+                MenuBarGlyph(state: .open, size: 16)
+                    .foregroundStyle(tokens.fg)
+                    .offset(y: -1)
+            }
+        } lines: {
+            Text("Ready to send")
+                .surfaceFont(13, .semibold)
+                .foregroundStyle(tokens.fg)
+            SplitName(name: Format.packageLabel(for: items), suffix: " · \(Format.size(model.collectedBytes))")
+                .surfaceFont(12)
+                .foregroundStyle(tokens.fg2)
+            Text("Hold ⌥ as you drop to add more.")
+                .surfaceFont(12)
+                .foregroundStyle(tokens.fg2)
+            HStack(spacing: 8) {
+                SurfaceButton(title: "Send", action: model.sendCollected)
+                SurfaceButton(title: "Clear", isProminent: false, action: model.clearCollected)
+            }
+            .padding(.top, 8)
         }
     }
 }
